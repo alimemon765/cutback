@@ -1,117 +1,138 @@
 'use client';
 
-import { useState } from 'react';
-import { useRouter } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
+import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { useState, useTransition } from 'react';
+import { Loader2 } from 'lucide-react';
 
 export default function SignupForm() {
   const router = useRouter();
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-  const [fullName, setFullName] = useState('');
-  const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [isPending, startTransition] = useTransition();
 
-  const handleSignup = async (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
-    setIsLoading(true);
+    console.log('🔵 [SIGNUP FORM] Form submitted');
     setError(null);
-
-    const supabase = createClient();
-    const { error } = await supabase.auth.signUp({
-      email,
-      password,
-      options: {
-        data: {
-          full_name: fullName,
+    
+    startTransition(async () => {
+      const formData = new FormData(e.currentTarget);
+      const email = formData.get('email') as string;
+      const password = formData.get('password') as string;
+      const fullName = formData.get('fullName') as string;
+      
+      // Signup with client directly - this will set cookies properly
+      const supabase = createClient();
+      const { data, error: authError } = await supabase.auth.signUp({
+        email,
+        password,
+        options: {
+          data: {
+            full_name: fullName,
+          },
         },
-        emailRedirectTo: `${window.location.origin}/auth/callback`,
-      },
-    });
+      });
 
-    if (error) {
-      setError(error.message);
-      setIsLoading(false);
-    } else {
-      // Profile will be created automatically by the trigger
-      router.push('/dashboard');
-      router.refresh();
-    }
+      console.log('🔵 [SIGNUP FORM] Auth result:', { 
+        hasUser: !!data.user,
+        hasSession: !!data.session, 
+        hasError: !!authError 
+      });
+
+      if (authError) {
+        console.error('❌ [SIGNUP FORM] Error:', authError.message);
+        setError(authError.message);
+        return;
+      }
+
+      // Check if email confirmation is required
+      if (data.user && !data.session) {
+        console.log('📧 [SIGNUP FORM] Email confirmation required');
+        setNeedsConfirmation(true);
+        return;
+      }
+
+      if (data.session) {
+        console.log('✅ [SIGNUP FORM] Signup successful!');
+        console.log('🚀 [SIGNUP FORM] Redirecting to dashboard...');
+        window.location.href = '/dashboard';
+      }
+    });
   };
 
   return (
     <div className="mt-8 space-y-6">
-      <form className="mt-8 space-y-6" onSubmit={handleSignup}>
-        <div className="space-y-4 rounded-md shadow-sm">
-          <div>
-            <label htmlFor="fullName" className="sr-only">
+      <form onSubmit={handleSubmit} className="space-y-6">
+        <div className="space-y-4">
+          <div className="space-y-2">
+            <Label htmlFor="fullName" className="font-mono text-xs uppercase tracking-wider text-muted-foreground">
               Full name
-            </label>
-            <input
+            </Label>
+            <Input
               id="fullName"
               name="fullName"
               type="text"
               autoComplete="name"
               required
-              value={fullName}
-              onChange={(e) => setFullName(e.target.value)}
-              className="relative block w-full rounded-md border border-gray-300 px-3 py-2 text-gray-900 placeholder-gray-500 focus:z-10 focus:border-blue-500 focus:outline-none focus:ring-blue-500 sm:text-sm"
+              className="sharp bg-background border-border"
               placeholder="Full name"
             />
           </div>
-          <div>
-            <label htmlFor="email" className="sr-only">
+          <div className="space-y-2">
+            <Label htmlFor="email" className="font-mono text-xs uppercase tracking-wider text-muted-foreground">
               Email address
-            </label>
-            <input
+            </Label>
+            <Input
               id="email"
               name="email"
               type="email"
               autoComplete="email"
               required
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              className="relative block w-full rounded-md border border-gray-300 px-3 py-2 text-gray-900 placeholder-gray-500 focus:z-10 focus:border-blue-500 focus:outline-none focus:ring-blue-500 sm:text-sm"
+              className="sharp bg-background border-border"
               placeholder="Email address"
             />
           </div>
-          <div>
-            <label htmlFor="password" className="sr-only">
+          <div className="space-y-2">
+            <Label htmlFor="password" className="font-mono text-xs uppercase tracking-wider text-muted-foreground">
               Password
-            </label>
-            <input
+            </Label>
+            <Input
               id="password"
               name="password"
               type="password"
               autoComplete="new-password"
               required
               minLength={6}
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              className="relative block w-full rounded-md border border-gray-300 px-3 py-2 text-gray-900 placeholder-gray-500 focus:z-10 focus:border-blue-500 focus:outline-none focus:ring-blue-500 sm:text-sm"
+              className="sharp bg-background border-border"
               placeholder="Password (min 6 characters)"
             />
           </div>
         </div>
 
         {error && (
-          <div className="rounded-md bg-red-50 p-4">
-            <p className="text-sm text-red-800">{error}</p>
+          <div className="rounded-md bg-destructive/10 border border-destructive/20 p-4">
+            <p className="text-sm text-destructive">{error}</p>
           </div>
         )}
 
-        <div>
-          <Button
-            type="submit"
-            className="w-full"
-            disabled={isLoading}
-          >
-            {isLoading ? 'Creating account...' : 'Create account'}
-          </Button>
-        </div>
+        <Button
+          type="submit"
+          className="w-full sharp"
+          disabled={isPending}
+        >
+          {isPending ? (
+            <>
+              <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+              Creating account...
+            </>
+          ) : (
+            'Create account'
+          )}
+        </Button>
       </form>
     </div>
   );
 }
-
