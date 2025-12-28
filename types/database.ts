@@ -1,6 +1,3 @@
-// Auto-generated database types based on Supabase schema
-// These types match the database tables exactly
-
 export type Json =
   | string
   | number
@@ -15,25 +12,28 @@ export interface Database {
       profiles: {
         Row: {
           id: string
-          email: string | null
+          email: string
           full_name: string | null
           avatar_url: string | null
+          role: string
           created_at: string
           updated_at: string
         }
         Insert: {
           id: string
-          email?: string | null
+          email: string
           full_name?: string | null
           avatar_url?: string | null
+          role?: string
           created_at?: string
           updated_at?: string
         }
         Update: {
           id?: string
-          email?: string | null
+          email?: string
           full_name?: string | null
           avatar_url?: string | null
+          role?: string
           created_at?: string
           updated_at?: string
         }
@@ -45,7 +45,6 @@ export interface Database {
           description: string | null
           owner_id: string
           is_archived: boolean
-          settings: Json
           created_at: string
           updated_at: string
         }
@@ -55,7 +54,6 @@ export interface Database {
           description?: string | null
           owner_id: string
           is_archived?: boolean
-          settings?: Json
           created_at?: string
           updated_at?: string
         }
@@ -65,35 +63,8 @@ export interface Database {
           description?: string | null
           owner_id?: string
           is_archived?: boolean
-          settings?: Json
           created_at?: string
           updated_at?: string
-        }
-      }
-      team_members: {
-        Row: {
-          id: string
-          project_id: string
-          user_id: string
-          role: 'owner' | 'editor' | 'viewer'
-          invited_by: string | null
-          created_at: string
-        }
-        Insert: {
-          id?: string
-          project_id: string
-          user_id: string
-          role: 'owner' | 'editor' | 'viewer'
-          invited_by?: string | null
-          created_at?: string
-        }
-        Update: {
-          id?: string
-          project_id?: string
-          user_id?: string
-          role?: 'owner' | 'editor' | 'viewer'
-          invited_by?: string | null
-          created_at?: string
         }
       }
       video_versions: {
@@ -101,43 +72,43 @@ export interface Database {
           id: string
           project_id: string
           version_number: number
-          file_url: string
           file_name: string
+          file_path: string
           file_size: number | null
+          mime_type: string | null
           duration: number | null
-          thumbnail_url: string | null
+          storage_url: string
           is_active: boolean
-          approval_status: 'pending' | 'approved'
+          uploaded_by: string
           created_at: string
-          updated_at: string
         }
         Insert: {
           id?: string
           project_id: string
           version_number: number
-          file_url: string
           file_name: string
+          file_path: string
           file_size?: number | null
+          mime_type?: string | null
           duration?: number | null
-          thumbnail_url?: string | null
+          storage_url: string
           is_active?: boolean
-          approval_status?: 'pending' | 'approved'
+          uploaded_by: string
           created_at?: string
-          updated_at?: string
         }
         Update: {
           id?: string
           project_id?: string
           version_number?: number
-          file_url?: string
           file_name?: string
+          file_path?: string
           file_size?: number | null
+          mime_type?: string | null
           duration?: number | null
-          thumbnail_url?: string | null
+          storage_url?: string
           is_active?: boolean
-          approval_status?: 'pending' | 'approved'
+          uploaded_by?: string
           created_at?: string
-          updated_at?: string
         }
       }
       comments: {
@@ -148,8 +119,8 @@ export interface Database {
           client_name: string | null
           timestamp: number
           content: string
-          status: 'open' | 'in_progress' | 'resolved'
-          parent_id: string | null
+          status: string
+          parent_comment_id: string | null
           created_at: string
           updated_at: string
         }
@@ -160,8 +131,8 @@ export interface Database {
           client_name?: string | null
           timestamp: number
           content: string
-          status?: 'open' | 'in_progress' | 'resolved'
-          parent_id?: string | null
+          status?: string
+          parent_comment_id?: string | null
           created_at?: string
           updated_at?: string
         }
@@ -172,10 +143,71 @@ export interface Database {
           client_name?: string | null
           timestamp?: number
           content?: string
-          status?: 'open' | 'in_progress' | 'resolved'
-          parent_id?: string | null
+          status?: string
+          parent_comment_id?: string | null
           created_at?: string
           updated_at?: string
+        }
+      }
+      review_links: {
+        Row: {
+          id: string
+          project_id: string
+          token: string
+          password_hash: string | null
+          expires_at: string | null
+          is_active: boolean
+          access_count: number
+          last_accessed_at: string | null
+          created_at: string
+          created_by: string
+        }
+        Insert: {
+          id?: string
+          project_id: string
+          token?: string
+          password_hash?: string | null
+          expires_at?: string | null
+          is_active?: boolean
+          access_count?: number
+          last_accessed_at?: string | null
+          created_at?: string
+          created_by: string
+        }
+        Update: {
+          id?: string
+          project_id?: string
+          token?: string
+          password_hash?: string | null
+          expires_at?: string | null
+          is_active?: boolean
+          access_count?: number
+          last_accessed_at?: string | null
+          created_at?: string
+          created_by?: string
+        }
+      }
+      team_members: {
+        Row: {
+          id: string
+          project_id: string
+          user_id: string
+          role: string
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          project_id: string
+          user_id: string
+          role?: string
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          project_id?: string
+          user_id?: string
+          role?: string
+          created_at?: string
         }
       }
       project_invitations: {
@@ -183,33 +215,33 @@ export interface Database {
           id: string
           project_id: string
           email: string
-          role: 'editor' | 'viewer'
+          role: string
           token: string
-          invited_by: string
-          accepted_at: string | null
           expires_at: string
+          accepted_at: string | null
+          created_by: string
           created_at: string
         }
         Insert: {
           id?: string
           project_id: string
           email: string
-          role: 'editor' | 'viewer'
-          token: string
-          invited_by: string
+          role?: string
+          token?: string
+          expires_at?: string
           accepted_at?: string | null
-          expires_at: string
+          created_by: string
           created_at?: string
         }
         Update: {
           id?: string
           project_id?: string
           email?: string
-          role?: 'editor' | 'viewer'
+          role?: string
           token?: string
-          invited_by?: string
-          accepted_at?: string | null
           expires_at?: string
+          accepted_at?: string | null
+          created_by?: string
           created_at?: string
         }
       }
@@ -218,7 +250,7 @@ export interface Database {
           id: string
           user_id: string
           project_id: string | null
-          type: 'comment' | 'reply' | 'version_upload' | 'invitation' | 'mention'
+          type: string
           title: string
           message: string | null
           read: boolean
@@ -229,7 +261,7 @@ export interface Database {
           id?: string
           user_id: string
           project_id?: string | null
-          type: 'comment' | 'reply' | 'version_upload' | 'invitation' | 'mention'
+          type: string
           title: string
           message?: string | null
           read?: boolean
@@ -240,7 +272,7 @@ export interface Database {
           id?: string
           user_id?: string
           project_id?: string | null
-          type?: 'comment' | 'reply' | 'version_upload' | 'invitation' | 'mention'
+          type?: string
           title?: string
           message?: string | null
           read?: boolean
@@ -260,4 +292,3 @@ export interface Database {
     }
   }
 }
-

@@ -5,6 +5,7 @@ import { createClient } from '@/lib/supabase/client';
 import { Button } from '@/components/ui/button';
 import { Plus, Video, Clock, Loader2 } from 'lucide-react';
 import ProtectedRoute from '@/components/auth/ProtectedRoute';
+import CreateProjectModal from '@/components/projects/CreateProjectModal';
 import type { Database } from '@/types/database';
 
 type Project = Database['public']['Tables']['projects']['Row'];
@@ -12,33 +13,44 @@ type Project = Database['public']['Tables']['projects']['Row'];
 export default function DashboardPage() {
   const [projects, setProjects] = useState<Project[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [isModalOpen, setIsModalOpen] = useState(false);
 
-  useEffect(() => {
-    const loadData = async () => {
-      console.log('🏠 [DASHBOARD] Loading data...');
-      const supabase = createClient();
+  const loadProjects = async () => {
+    console.log('🏠 [DASHBOARD] Loading data...');
+    const supabase = createClient();
 
-      // Get user
-      const { data: { user } } = await supabase.auth.getUser();
-      console.log('🏠 [DASHBOARD] User:', user?.email);
+    // Get user
+    const { data: { user } } = await supabase.auth.getUser();
+    console.log('🏠 [DASHBOARD] User:', user?.email);
 
-      if (user) {
-        // Get projects
-        const { data: projectsData } = await supabase
-          .from('projects')
-          .select('*')
-          .eq('owner_id', user.id)
-          .eq('is_archived', false)
-          .order('created_at', { ascending: false });
+    if (user) {
+      // Get projects with error handling
+      const { data: projectsData, error: projectsError } = await supabase
+        .from('projects')
+        .select('*')
+        .eq('owner_id', user.id)
+        .eq('is_archived', false)
+        .order('created_at', { ascending: false });
 
+      if (projectsError) {
+        console.error('🏠 [DASHBOARD] Error loading projects:', projectsError);
+        console.error('🏠 [DASHBOARD] Error details:', {
+          message: projectsError.message,
+          details: projectsError.details,
+          hint: projectsError.hint,
+          code: projectsError.code,
+        });
+      } else {
         setProjects(projectsData || []);
         console.log('🏠 [DASHBOARD] Loaded', projectsData?.length || 0, 'projects');
       }
+    }
 
-      setIsLoading(false);
-    };
+    setIsLoading(false);
+  };
 
-    loadData();
+  useEffect(() => {
+    loadProjects();
   }, []);
 
   if (isLoading) {
@@ -61,7 +73,7 @@ export default function DashboardPage() {
               <h1 className="editorial-title text-3xl text-foreground">CutBack</h1>
             </div>
             
-            <Button className="gap-2 sharp">
+            <Button className="gap-2 sharp" onClick={() => setIsModalOpen(true)}>
               <Plus className="w-4 h-4" />
               New Project
             </Button>
@@ -92,7 +104,7 @@ export default function DashboardPage() {
               <p className="text-muted-foreground mb-6 max-w-sm mx-auto">
                 Create your first project to start collecting feedback on your video edits.
               </p>
-              <Button className="gap-2 sharp">
+              <Button className="gap-2 sharp" onClick={() => setIsModalOpen(true)}>
                 <Plus className="w-4 h-4" />
                 Create Your First Project
               </Button>
@@ -100,9 +112,10 @@ export default function DashboardPage() {
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-px bg-border">
               {projects.map((project, index) => (
-                <div
+                <a
                   key={project.id}
-                  className="group relative bg-card hover:bg-secondary/50 transition-colors"
+                  href={`/project/${project.id}`}
+                  className="group relative bg-card hover:bg-secondary/50 transition-colors block"
                 >
                   {/* Index Number */}
                   <span className="absolute top-4 left-4 index-number z-10">
@@ -133,11 +146,18 @@ export default function DashboardPage() {
                       </span>
                     </div>
                   </div>
-                </div>
+                </a>
               ))}
             </div>
           )}
         </main>
+
+        {/* Create Project Modal */}
+        <CreateProjectModal
+          open={isModalOpen}
+          onOpenChange={setIsModalOpen}
+          onSuccess={loadProjects}
+        />
       </div>
     </ProtectedRoute>
   );

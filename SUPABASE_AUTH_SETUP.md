@@ -56,3 +56,4 @@ To see if email confirmation is enabled:
 - They must click the link to activate their account
 - This prevents fake/spam accounts
 
+

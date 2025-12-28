@@ -41,9 +41,38 @@ export default function LoginForm() {
 
       if (data.session) {
         console.log('✅ [LOGIN FORM] Login successful!');
-        console.log('🍪 [LOGIN FORM] Cookies:', document.cookie);
+        console.log('🔐 [LOGIN FORM] Session:', {
+          hasSession: !!data.session,
+          hasUser: !!data.user,
+          userId: data.user?.id,
+          userEmail: data.user?.email,
+        });
+        
+        // Check cookies after login
+        const allCookies = document.cookie;
+        console.log('🍪 [LOGIN FORM] All cookies:', allCookies);
+        
+        // Check for Supabase cookies specifically
+        const hasSupabaseCookie = allCookies.includes('sb-');
+        console.log('🍪 [LOGIN FORM] Has Supabase cookie:', hasSupabaseCookie);
+        
+        if (hasSupabaseCookie) {
+          const sbCookies = allCookies.split(';').filter(c => c.trim().startsWith('sb-'));
+          console.log('🍪 [LOGIN FORM] Supabase cookies found:', sbCookies.length);
+          sbCookies.forEach(cookie => {
+            const [name] = cookie.trim().split('=');
+            console.log(`🍪 [LOGIN FORM] Cookie: ${name}`);
+          });
+        } else {
+          console.warn('⚠️ [LOGIN FORM] WARNING: No Supabase cookies found after login!');
+        }
+        
         console.log('🚀 [LOGIN FORM] Redirecting to dashboard...');
-        window.location.href = '/dashboard';
+        
+        // Small delay to ensure cookies are set
+        setTimeout(() => {
+          window.location.href = '/dashboard';
+        }, 100);
       }
     });
   };

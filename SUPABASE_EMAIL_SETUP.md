@@ -44,3 +44,4 @@ The signup form will now show a message telling you to check your email if confi
 - Users will receive confirmation emails
 - They must click the link to activate their account
 
+

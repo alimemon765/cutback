@@ -113,6 +113,22 @@ CREATE TABLE IF NOT EXISTS public.notifications (
 );
 
 -- ============================================
+-- REVIEW LINKS TABLE
+-- ============================================
+CREATE TABLE IF NOT EXISTS public.review_links (
+  id UUID DEFAULT uuid_generate_v4() PRIMARY KEY,
+  project_id UUID REFERENCES public.projects(id) ON DELETE CASCADE NOT NULL,
+  token TEXT UNIQUE NOT NULL DEFAULT encode(gen_random_bytes(32), 'hex'),
+  password_hash TEXT,
+  expires_at TIMESTAMP WITH TIME ZONE,
+  is_active BOOLEAN DEFAULT TRUE,
+  access_count INTEGER DEFAULT 0,
+  last_accessed_at TIMESTAMP WITH TIME ZONE,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT TIMEZONE('utc'::text, NOW()) NOT NULL,
+  created_by UUID REFERENCES auth.users(id) NOT NULL
+);
+
+-- ============================================
 -- ENABLE ROW LEVEL SECURITY ON ALL TABLES
 -- ============================================
 ALTER TABLE public.profiles ENABLE ROW LEVEL SECURITY;
@@ -122,6 +138,7 @@ ALTER TABLE public.video_versions ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.comments ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.project_invitations ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.notifications ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.review_links ENABLE ROW LEVEL SECURITY;
 
 -- ============================================
 -- CREATE ALL POLICIES
@@ -266,6 +283,35 @@ CREATE POLICY "Users can view own notifications"
 CREATE POLICY "Users can update own notifications"
   ON public.notifications FOR UPDATE
   USING (auth.uid() = user_id);
+
+-- Review links policies
+CREATE POLICY "Editors can view own project links"
+  ON public.review_links FOR SELECT
+  USING (EXISTS (
+    SELECT 1 FROM public.projects
+    WHERE projects.id = review_links.project_id
+    AND projects.owner_id = auth.uid()
+  ));
+
+CREATE POLICY "Editors can create review links"
+  ON public.review_links FOR INSERT
+  WITH CHECK (EXISTS (
+    SELECT 1 FROM public.projects
+    WHERE projects.id = review_links.project_id
+    AND projects.owner_id = auth.uid()
+  ));
+
+CREATE POLICY "Editors can update own project links"
+  ON public.review_links FOR UPDATE
+  USING (EXISTS (
+    SELECT 1 FROM public.projects
+    WHERE projects.id = review_links.project_id
+    AND projects.owner_id = auth.uid()
+  ));
+
+CREATE POLICY "Public can access by valid token"
+  ON public.review_links FOR SELECT
+  USING (is_active = TRUE AND (expires_at IS NULL OR expires_at > NOW()));
 
 -- ============================================
 -- INDEXES for Performance
