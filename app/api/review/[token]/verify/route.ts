@@ -1,23 +1,28 @@
-import { createAPIClient } from '@/lib/supabase/api';
 import { NextResponse } from 'next/server';
 import bcrypt from 'bcryptjs';
+import { createClient } from '@supabase/supabase-js';
 
 export async function POST(
   request: Request,
   { params }: { params: { token: string } }
 ) {
   try {
-    const supabase = createAPIClient(request);
     const token = params.token;
+    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
+    const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
+
+    // Create client with anon key only (no authentication) for public access
+    const supabase = createClient(supabaseUrl, supabaseAnonKey);
 
     // Parse request body
     const body = await request.json();
     const { password } = body;
 
-    // Get review link
+    // Get review link using REST API with anon key
+    // Query review_links without join first (to avoid RLS issues with projects table)
     const { data: reviewLink, error: linkError } = await supabase
       .from('review_links')
-      .select('*, projects!inner(id, name)')
+      .select('*')
       .eq('token', token)
       .eq('is_active', true)
       .single();
@@ -55,7 +60,7 @@ export async function POST(
       }
     }
 
-    // Get active video version
+    // Get active video version using anon key
     const { data: activeVersion, error: versionError } = await supabase
       .from('video_versions')
       .select('*')
@@ -70,10 +75,43 @@ export async function POST(
       );
     }
 
-    // Get signed URL for video
+    // Get signed URL for video using anon key
+    // Extract storage path from file_url (which is a full public URL)
+    // file_url format: https://xxx.supabase.co/storage/v1/object/public/videos/path/to/file.mp4
+    // We need: path/to/file.mp4
+    let storagePath: string | null = null;
+    
+    if (activeVersion.file_url) {
+      // Try to extract path from public URL
+      const urlMatch = activeVersion.file_url.match(/\/storage\/v1\/object\/public\/videos\/(.+)$/);
+      if (urlMatch && urlMatch[1]) {
+        storagePath = urlMatch[1];
+      } else {
+        // If file_url is already a path (not a full URL), use it directly
+        storagePath = activeVersion.file_url;
+      }
+    }
+    
+    // Fallback: check if we have file_path or storage_url columns
+    if (!storagePath && (activeVersion as any).file_path) {
+      storagePath = (activeVersion as any).file_path;
+    }
+    if (!storagePath && (activeVersion as any).storage_url) {
+      const storageUrl = (activeVersion as any).storage_url;
+      const urlMatch = storageUrl?.match(/\/storage\/v1\/object\/public\/videos\/(.+)$/);
+      storagePath = urlMatch ? urlMatch[1] : storageUrl;
+    }
+
+    if (!storagePath) {
+      return NextResponse.json(
+        { error: 'Video file path not found' },
+        { status: 500 }
+      );
+    }
+
     const { data: signedUrlData, error: urlError } = await supabase.storage
       .from('videos')
-      .createSignedUrl(activeVersion.file_path, 604800); // 7 days
+      .createSignedUrl(storagePath, 604800); // 7 days
 
     if (urlError || !signedUrlData) {
       console.error('Error creating signed URL:', urlError);
@@ -83,7 +121,7 @@ export async function POST(
       );
     }
 
-    // Update access count
+    // Update access count using anon key (will need RLS policy for this)
     await supabase
       .from('review_links')
       .update({
@@ -92,10 +130,12 @@ export async function POST(
       })
       .eq('id', reviewLink.id);
 
+    // Return project info (name will be fetched client-side if needed)
+    // We removed projects public policy to avoid recursion, so we can't query it here
     return NextResponse.json({
       project: {
         id: reviewLink.project_id,
-        name: reviewLink.projects.name,
+        name: 'Project', // Default name - client can fetch actual name if needed
       },
       videoVersion: {
         ...activeVersion,
@@ -111,4 +151,3 @@ export async function POST(
     );
   }
 }
-

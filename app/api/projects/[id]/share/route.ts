@@ -136,8 +136,35 @@ export async function POST(
     const reviewLink = reviewLinks[0]; // Supabase returns array with Prefer header
 
     // Return the link with full URL
-    const baseUrl = request.headers.get('origin') || process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3001';
+    // FIX: Better port detection - prefer request URL (most accurate), then env var
+    let baseUrl: string;
+    
+    // First, try to extract from request URL (most accurate for current server)
+    try {
+      const url = new URL(request.url);
+      baseUrl = `${url.protocol}//${url.host}`;
+      console.log('[Share Link] Using request URL:', baseUrl);
+    } catch (error) {
+      // Fallback to environment variable
+      if (process.env.NEXT_PUBLIC_APP_URL) {
+        baseUrl = process.env.NEXT_PUBLIC_APP_URL;
+        console.log('[Share Link] Using NEXT_PUBLIC_APP_URL:', baseUrl);
+      } else {
+        // Last resort: try headers
+        const host = request.headers.get('host');
+        const protocol = request.headers.get('x-forwarded-proto') || 'http';
+        if (host) {
+          baseUrl = `${protocol}://${host}`;
+          console.log('[Share Link] Using headers:', baseUrl);
+        } else {
+          baseUrl = 'http://localhost:3000';
+          console.log('[Share Link] Using fallback:', baseUrl);
+        }
+      }
+    }
+    
     const shareUrl = `${baseUrl}/review/${reviewLink.token}`;
+    console.log('[Share Link] Generated URL:', shareUrl);
 
     return NextResponse.json(
       {
@@ -262,7 +289,21 @@ export async function GET(
     const reviewLinks = await linksResponse.json();
 
     // Add full URLs to each link
-    const baseUrl = request.headers.get('origin') || process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3001';
+    let baseUrl: string;
+    
+    if (process.env.NEXT_PUBLIC_APP_URL) {
+      baseUrl = process.env.NEXT_PUBLIC_APP_URL;
+    } else {
+      try {
+        const url = new URL(request.url);
+        baseUrl = `${url.protocol}//${url.host}`;
+      } catch (error) {
+        const host = request.headers.get('host');
+        const protocol = request.headers.get('x-forwarded-proto') || 'http';
+        baseUrl = host ? `${protocol}://${host}` : 'http://localhost:3002';
+      }
+    }
+    
     const linksWithUrls = reviewLinks.map((link: any) => ({
       ...link,
       share_url: `${baseUrl}/review/${link.token}`,

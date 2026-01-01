@@ -1,28 +1,47 @@
-import { createAPIClient } from '@/lib/supabase/api';
-import { NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
+import { createClient } from '@supabase/supabase-js';
+
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
+const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
 
 export async function POST(
-  request: Request,
+  request: NextRequest,
   { params }: { params: { token: string } }
 ) {
   try {
-    const supabase = createAPIClient(request);
     const token = params.token;
 
-    // Verify token is valid (no auth required for public access)
-    const { data: reviewLink, error: linkError } = await supabase
-      .from('review_links')
-      .select('*, projects!inner(id, name)')
-      .eq('token', token)
-      .eq('is_active', true)
-      .single();
+    // Use REST API with anon key for public access
+    const supabase = createClient(supabaseUrl, supabaseAnonKey);
 
-    if (linkError || !reviewLink) {
+    // Verify token is valid using REST API
+    const linkResponse = await fetch(
+      `${supabaseUrl}/rest/v1/review_links?token=eq.${token}&is_active=eq.true&select=*`,
+      {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+          'apikey': supabaseAnonKey,
+        },
+      }
+    );
+
+    if (!linkResponse.ok) {
       return NextResponse.json(
         { error: 'Invalid or expired link' },
         { status: 404 }
       );
     }
+
+    const reviewLinks = await linkResponse.json();
+    if (!reviewLinks || reviewLinks.length === 0) {
+      return NextResponse.json(
+        { error: 'Invalid or expired link' },
+        { status: 404 }
+      );
+    }
+
+    const reviewLink = reviewLinks[0];
 
     // Check if link has expired
     if (reviewLink.expires_at && new Date(reviewLink.expires_at) < new Date()) {
@@ -57,83 +76,128 @@ export async function POST(
       );
     }
 
-    // Get the active video version for this project
-    const { data: activeVersion, error: versionError } = await supabase
-      .from('video_versions')
-      .select('id')
-      .eq('project_id', reviewLink.project_id)
-      .eq('is_active', true)
-      .single();
+    // Get the active video version using REST API
+    const versionResponse = await fetch(
+      `${supabaseUrl}/rest/v1/video_versions?project_id=eq.${reviewLink.project_id}&is_active=eq.true&select=id&limit=1`,
+      {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+          'apikey': supabaseAnonKey,
+        },
+      }
+    );
 
-    if (versionError || !activeVersion) {
+    if (!versionResponse.ok) {
       return NextResponse.json(
         { error: 'No active video version found' },
         { status: 404 }
       );
     }
 
-    // Create comment
-    const { data: comment, error: commentError } = await supabase
-      .from('comments')
-      .insert({
-        video_version_id: activeVersion.id,
-        client_name: clientName.trim(),
-        content: content.trim(),
-        timestamp,
-        status: 'open',
-      })
-      .select()
-      .single();
+    const versions = await versionResponse.json();
+    if (!versions || versions.length === 0) {
+      return NextResponse.json(
+        { error: 'No active video version found' },
+        { status: 404 }
+      );
+    }
 
-    if (commentError) {
-      console.error('Error creating comment:', commentError);
+    const activeVersion = versions[0];
+
+    // Create comment using REST API
+    const commentResponse = await fetch(
+      `${supabaseUrl}/rest/v1/comments`,
+      {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'apikey': supabaseAnonKey,
+          'Prefer': 'return=representation',
+        },
+        body: JSON.stringify({
+          video_version_id: activeVersion.id,
+          client_name: clientName.trim(),
+          content: content.trim(),
+          timestamp,
+          status: 'open',
+        }),
+      }
+    );
+
+    if (!commentResponse.ok) {
+      const error = await commentResponse.json();
+      console.error('Error creating comment:', error);
       return NextResponse.json(
         { error: 'Failed to create comment' },
         { status: 500 }
       );
     }
 
-    // Update access count and last accessed time
-    await supabase
-      .from('review_links')
-      .update({
-        access_count: (reviewLink.access_count || 0) + 1,
-        last_accessed_at: new Date().toISOString(),
-      })
-      .eq('id', reviewLink.id);
+    const comment = await commentResponse.json();
+    const createdComment = Array.isArray(comment) ? comment[0] : comment;
 
-    return NextResponse.json(comment, { status: 201 });
-  } catch (error) {
+    // Update access count using REST API
+    await fetch(
+      `${supabaseUrl}/rest/v1/review_links?id=eq.${reviewLink.id}`,
+      {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+          'apikey': supabaseAnonKey,
+        },
+        body: JSON.stringify({
+          access_count: (reviewLink.access_count || 0) + 1,
+          last_accessed_at: new Date().toISOString(),
+        }),
+      }
+    );
+
+    return NextResponse.json(createdComment, { status: 201 });
+  } catch (error: any) {
     console.error('Unexpected error:', error);
     return NextResponse.json(
-      { error: 'Internal server error' },
+      { error: error.message || 'Internal server error' },
       { status: 500 }
     );
   }
 }
 
 export async function GET(
-  request: Request,
+  request: NextRequest,
   { params }: { params: { token: string } }
 ) {
   try {
-    const supabase = createAPIClient(request);
     const token = params.token;
 
-    // Verify token is valid
-    const { data: reviewLink, error: linkError } = await supabase
-      .from('review_links')
-      .select('*, projects!inner(id)')
-      .eq('token', token)
-      .eq('is_active', true)
-      .single();
+    // Use REST API with anon key for public access
+    const linkResponse = await fetch(
+      `${supabaseUrl}/rest/v1/review_links?token=eq.${token}&is_active=eq.true&select=*`,
+      {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+          'apikey': supabaseAnonKey,
+        },
+      }
+    );
 
-    if (linkError || !reviewLink) {
+    if (!linkResponse.ok) {
       return NextResponse.json(
         { error: 'Invalid or expired link' },
         { status: 404 }
       );
     }
+
+    const reviewLinks = await linkResponse.json();
+    if (!reviewLinks || reviewLinks.length === 0) {
+      return NextResponse.json(
+        { error: 'Invalid or expired link' },
+        { status: 404 }
+      );
+    }
+
+    const reviewLink = reviewLinks[0];
 
     // Check if link has expired
     if (reviewLink.expires_at && new Date(reviewLink.expires_at) < new Date()) {
@@ -143,43 +207,63 @@ export async function GET(
       );
     }
 
-    // Get the active video version
-    const { data: activeVersion, error: versionError } = await supabase
-      .from('video_versions')
-      .select('id')
-      .eq('project_id', reviewLink.project_id)
-      .eq('is_active', true)
-      .single();
+    // Get the active video version using REST API
+    const versionResponse = await fetch(
+      `${supabaseUrl}/rest/v1/video_versions?project_id=eq.${reviewLink.project_id}&is_active=eq.true&select=id&limit=1`,
+      {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+          'apikey': supabaseAnonKey,
+        },
+      }
+    );
 
-    if (versionError || !activeVersion) {
+    if (!versionResponse.ok) {
       return NextResponse.json(
         { error: 'No active video version found' },
         { status: 404 }
       );
     }
 
-    // Get all comments for this video version
-    const { data: comments, error: commentsError } = await supabase
-      .from('comments')
-      .select('*')
-      .eq('video_version_id', activeVersion.id)
-      .order('timestamp', { ascending: true });
+    const versions = await versionResponse.json();
+    if (!versions || versions.length === 0) {
+      return NextResponse.json(
+        { error: 'No active video version found' },
+        { status: 404 }
+      );
+    }
 
-    if (commentsError) {
-      console.error('Error fetching comments:', commentsError);
+    const activeVersion = versions[0];
+
+    // Get all comments for this video version using REST API
+    const commentsResponse = await fetch(
+      `${supabaseUrl}/rest/v1/comments?video_version_id=eq.${activeVersion.id}&order=timestamp.asc`,
+      {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+          'apikey': supabaseAnonKey,
+        },
+      }
+    );
+
+    if (!commentsResponse.ok) {
+      const error = await commentsResponse.json();
+      console.error('Error fetching comments:', error);
       return NextResponse.json(
         { error: 'Failed to fetch comments' },
         { status: 500 }
       );
     }
 
+    const comments = await commentsResponse.json();
     return NextResponse.json(comments);
-  } catch (error) {
+  } catch (error: any) {
     console.error('Unexpected error:', error);
     return NextResponse.json(
-      { error: 'Internal server error' },
+      { error: error.message || 'Internal server error' },
       { status: 500 }
     );
   }
 }
-
