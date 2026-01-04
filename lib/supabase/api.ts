@@ -77,7 +77,7 @@ export function createAPIClient(request: Request) {
           
           return cookies;
         },
-        setAll(cookiesToSet) {
+        setAll(cookiesToSet: Array<{ name: string; value: string; options?: any }>) {
           // Log what Supabase is trying to set (for debugging)
           console.log('[createAPIClient] Supabase trying to set cookies:', cookiesToSet.length);
           // No-op for API routes - we can't set cookies in API route responses

@@ -132,7 +132,8 @@ export default function ProjectPage() {
       });
 
       if (!response.ok) {
-        throw new Error('Failed to update comment status');
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.error || 'Failed to update comment status');
       }
 
       // Reload project data to refresh comments
@@ -415,8 +416,13 @@ function EditorCommentCard({ comment, onStatusChange }: EditorCommentCardProps) 
 
   const handleStatusChange = async (newStatus: string) => {
     setIsChangingStatus(true);
-    await onStatusChange(newStatus);
-    setIsChangingStatus(false);
+    try {
+      await onStatusChange(newStatus);
+    } catch (err) {
+      // Error is already logged in handleCommentStatusChange
+    } finally {
+      setIsChangingStatus(false);
+    }
   };
 
   const getStatusColor = (status: string) => {

@@ -51,7 +51,7 @@ export default function SignupForm() {
       // Check if email confirmation is required
       if (data.user && !data.session) {
         console.log('📧 [SIGNUP FORM] Email confirmation required');
-        setNeedsConfirmation(true);
+        setError('Please check your email to confirm your account before signing in.');
         return;
       }
 

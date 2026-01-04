@@ -14,7 +14,7 @@ export default function SignupSuccess() {
           <CardTitle className="editorial-title text-2xl">Account Created!</CardTitle>
         </div>
         <CardDescription>
-          We've sent a confirmation email to your inbox
+          We&apos;ve sent a confirmation email to your inbox
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
@@ -24,14 +24,14 @@ export default function SignupSuccess() {
             <p className="text-sm font-medium">Check your email</p>
             <p className="text-xs text-muted-foreground">
               Click the confirmation link in the email to activate your account. 
-              Don't forget to check your spam folder if you don't see it.
+              Don&apos;t forget to check your spam folder if you don&apos;t see it.
             </p>
           </div>
         </div>
         
         <div className="pt-4 border-t border-border">
           <p className="text-sm text-muted-foreground mb-4">
-            Once you've confirmed your email, you can sign in to your account.
+            Once you&apos;ve confirmed your email, you can sign in to your account.
           </p>
           <Link href="/login">
             <Button className="w-full sharp">
@@ -43,5 +43,7 @@ export default function SignupSuccess() {
     </Card>
   );
 }
+
+
 
 
