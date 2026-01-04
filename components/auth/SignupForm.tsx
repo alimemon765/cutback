@@ -26,9 +26,6 @@ export default function SignupForm() {
       
       // Signup with client directly - this will set cookies properly
       const supabase = createClient();
-      // #region agent log
-      fetch('http://127.0.0.1:7242/ingest/63acc359-d200-4cf4-abe5-60688b560998',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'components/auth/SignupForm.tsx:28',message:'Before signup call',data:{hasSupabaseClient:!!supabase},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'B'})}).catch(()=>{});
-      // #endregion
       const { data, error: authError } = await supabase.auth.signUp({
         email,
         password,
@@ -47,9 +44,6 @@ export default function SignupForm() {
 
       if (authError) {
         console.error('❌ [SIGNUP FORM] Error:', authError.message);
-        // #region agent log
-        fetch('http://127.0.0.1:7242/ingest/63acc359-d200-4cf4-abe5-60688b560998',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'components/auth/SignupForm.tsx:45',message:'Auth error occurred',data:{errorMessage:authError.message,errorStatus:authError.status,errorCode:authError.name},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'C'})}).catch(()=>{});
-        // #endregion
         setError(authError.message);
         return;
       }
