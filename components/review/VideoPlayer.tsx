@@ -141,7 +141,8 @@ export default function VideoPlayer({
         />
       )}
 
-      {/* Controls Overlay */}
+      {/* Controls Overlay - Only show for native video, not iframe */}
+      {!isGoogleDrivePreview && (
       <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/80 to-transparent p-4 opacity-0 group-hover:opacity-100 transition-opacity">
         {/* Progress Bar */}
         <div
