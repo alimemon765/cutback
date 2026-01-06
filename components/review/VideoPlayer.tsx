@@ -99,19 +99,30 @@ export default function VideoPlayer({
     }
   };
 
+  // Check if this is a Google Drive preview URL (needs iframe) - define early so it's accessible
+  const isGoogleDrivePreview = videoUrl.includes('drive.google.com/file/d/') && videoUrl.includes('/preview');
+
   const handleAddComment = () => {
     if (onAddComment) {
       // For Google Drive iframe, we can't get current time due to CORS restrictions
       // For native video, always get the actual current time directly from the video element
       let timestamp = 0;
+      
       if (!isGoogleDrivePreview && videoRef.current) {
         // Get current time directly from video element (most accurate)
-        timestamp = videoRef.current.currentTime || 0;
+        const videoTime = videoRef.current.currentTime;
+        timestamp = videoTime || 0;
+        
         // Ensure it's a valid number
         if (isNaN(timestamp) || timestamp < 0) {
           timestamp = 0;
         }
+        
+        console.log('[VideoPlayer] Captured timestamp:', timestamp, 'from video element');
+      } else {
+        console.log('[VideoPlayer] Google Drive video or no video ref - timestamp will be 0');
       }
+      
       // For Google Drive, timestamp will be 0 and user can manually adjust
       onAddComment(timestamp);
     }
@@ -128,9 +139,6 @@ export default function VideoPlayer({
     if (!video) return;
     video.currentTime = timestamp;
   };
-
-  // Check if this is a Google Drive preview URL (needs iframe)
-  const isGoogleDrivePreview = videoUrl.includes('drive.google.com/file/d/') && videoUrl.includes('/preview');
   
   return (
     <div className="relative bg-black group">
