@@ -25,6 +25,9 @@ export default function AddCommentForm({
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [commentTimestamp, setCommentTimestamp] = useState(timestamp);
+  const [manualMinutes, setManualMinutes] = useState<number | ''>('');
+  const [manualSeconds, setManualSeconds] = useState<number | ''>('');
+  const [useManualTimestamp, setUseManualTimestamp] = useState(false);
 
   useEffect(() => {
     // Load client name from localStorage if available
@@ -32,9 +35,21 @@ export default function AddCommentForm({
     if (savedName && !existingClientName) {
       setClientName(savedName);
     }
-    // Update timestamp when prop changes
-    setCommentTimestamp(timestamp);
-  }, [existingClientName, timestamp]);
+    // Update timestamp when prop changes (only if not using manual override)
+    if (!useManualTimestamp) {
+      setCommentTimestamp(timestamp);
+      // Update manual inputs to match automatic timestamp
+      const minutes = Math.floor(timestamp / 60);
+      const seconds = Math.floor(timestamp % 60);
+      setManualMinutes(minutes);
+      setManualSeconds(seconds);
+    }
+  }, [existingClientName, timestamp, useManualTimestamp]);
+  
+  // Calculate final timestamp: manual if provided, otherwise automatic
+  const finalTimestamp = useManualTimestamp && manualMinutes !== '' && manualSeconds !== ''
+    ? (Number(manualMinutes) * 60) + Number(manualSeconds)
+    : commentTimestamp;
 
   const formatTime = (time: number) => {
     const minutes = Math.floor(time / 60);
@@ -56,7 +71,7 @@ export default function AddCommentForm({
       await onSubmit({
         clientName: clientName.trim(),
         content: content.trim(),
-        timestamp: commentTimestamp,
+        timestamp: finalTimestamp,
       });
 
       // Reset form
@@ -85,55 +100,87 @@ export default function AddCommentForm({
       </div>
 
       <form onSubmit={handleSubmit} className="space-y-4">
-        {/* Timestamp Input - Always show, but highlight if manual entry needed */}
-        <div className="grid gap-2 mb-4">
+        {/* Timestamp Section */}
+        <div className="grid gap-3 mb-4 p-4 border border-border rounded-md bg-secondary/30">
           <div className="flex items-center justify-between">
-            <Label htmlFor="timestamp" className="font-mono text-xs uppercase tracking-wider">
-              Timestamp {commentTimestamp === 0 && <span className="text-primary">*</span>}
+            <Label className="font-mono text-xs uppercase tracking-wider">
+              Timestamp
             </Label>
-            {commentTimestamp === 0 && (
-              <span className="text-xs text-primary font-medium">
-                Required for Google Drive videos
-              </span>
-            )}
-          </div>
-          <div className="flex items-center gap-2">
-            <Input
-              id="timestamp"
-              type="text"
-              value={formatTime(commentTimestamp)}
-              onChange={(e) => {
-                // Parse MM:SS format
-                const value = e.target.value.trim();
-                const match = value.match(/^(\d+):(\d{2})$/);
-                if (match) {
-                  const minutes = parseInt(match[1], 10);
-                  const seconds = parseInt(match[2], 10);
-                  const totalSeconds = minutes * 60 + seconds;
-                  setCommentTimestamp(totalSeconds);
-                } else if (value === '' || value === '0:00') {
-                  setCommentTimestamp(0);
-                }
-              }}
-              placeholder="0:00"
-              className={`sharp font-mono w-32 ${commentTimestamp === 0 ? 'border-primary focus:border-primary' : ''}`}
-              disabled={isSubmitting}
-              required={commentTimestamp === 0}
-            />
             <span className="px-2 py-1 text-sm font-mono bg-primary/20 text-primary border border-primary/30 rounded">
-              {formatTime(commentTimestamp)}
+              {formatTime(finalTimestamp)}
             </span>
           </div>
-          <div className="flex items-start gap-2">
-            <span className="text-xs text-muted-foreground">
-              Format: MM:SS (e.g., 1:23 for 1 minute 23 seconds)
+          
+          {/* Automatic Timestamp Display */}
+          <div className="flex items-center gap-2">
+            <span className="text-xs text-muted-foreground w-24">Auto-captured:</span>
+            <span className="px-2 py-1 text-sm font-mono bg-background border border-border rounded">
+              {formatTime(commentTimestamp)}
             </span>
             {commentTimestamp === 0 && (
               <span className="text-xs text-muted-foreground italic">
-                • Look at the video player&apos;s time display to get the current timestamp
+                (Click &quot;Add Comment&quot; while video is playing)
               </span>
             )}
           </div>
+
+          {/* Manual Override */}
+          <div className="flex items-center gap-2 pt-2 border-t border-border">
+            <span className="text-xs text-muted-foreground w-24">Manual override:</span>
+            <div className="flex items-center gap-2">
+              <div className="flex items-center gap-1">
+                <Input
+                  type="number"
+                  min="0"
+                  value={manualMinutes}
+                  onChange={(e) => {
+                    const val = e.target.value === '' ? '' : Math.max(0, parseInt(e.target.value, 10) || 0);
+                    setManualMinutes(val);
+                    setUseManualTimestamp(val !== '' || manualSeconds !== '');
+                  }}
+                  placeholder="MM"
+                  className="sharp font-mono w-16 text-center"
+                  disabled={isSubmitting}
+                />
+                <span className="text-sm text-muted-foreground">:</span>
+                <Input
+                  type="number"
+                  min="0"
+                  max="59"
+                  value={manualSeconds}
+                  onChange={(e) => {
+                    const val = e.target.value === '' ? '' : Math.max(0, Math.min(59, parseInt(e.target.value, 10) || 0));
+                    setManualSeconds(val);
+                    setUseManualTimestamp(val !== '' || manualMinutes !== '');
+                  }}
+                  placeholder="SS"
+                  className="sharp font-mono w-16 text-center"
+                  disabled={isSubmitting}
+                />
+              </div>
+              {(manualMinutes !== '' || manualSeconds !== '') && (
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => {
+                    setManualMinutes('');
+                    setManualSeconds('');
+                    setUseManualTimestamp(false);
+                  }}
+                  className="text-xs h-7"
+                >
+                  Clear
+                </Button>
+              )}
+            </div>
+          </div>
+          
+          {useManualTimestamp && (
+            <div className="text-xs text-primary">
+              ✓ Using manual timestamp: {formatTime(finalTimestamp)}
+            </div>
+          )}
         </div>
 
         {!existingClientName && (

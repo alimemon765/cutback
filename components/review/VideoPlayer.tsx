@@ -17,15 +17,115 @@ export default function VideoPlayer({
 }: VideoPlayerProps) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const progressBarRef = useRef<HTMLDivElement>(null);
+  const iframeRef = useRef<HTMLIFrameElement>(null);
   const [isPlaying, setIsPlaying] = useState(false);
   const [isMuted, setIsMuted] = useState(false);
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(0);
   const [volume, setVolume] = useState(1);
+  
+  // Google Drive playback tracking (for automatic timestamp)
+  const playbackStartTimeRef = useRef<number | null>(null);
+  const playbackTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const lastKnownTimeRef = useRef<number>(0);
 
   // Check if this is a Google Drive preview URL (needs iframe) - define early
   const isGoogleDrivePreview = videoUrl.includes('drive.google.com/file/d/') && videoUrl.includes('/preview');
 
+  // Track playback time for Google Drive videos
+  useEffect(() => {
+    if (!isGoogleDrivePreview) return;
+
+    let hasStarted = false;
+    const iframe = iframeRef.current;
+
+    // Start tracking playback time
+    const startTracking = () => {
+      if (hasStarted) return;
+      hasStarted = true;
+      
+      playbackStartTimeRef.current = Date.now();
+      lastKnownTimeRef.current = 0;
+      setCurrentTime(0);
+
+      // Update time every 500ms for better accuracy
+      playbackTimerRef.current = setInterval(() => {
+        if (playbackStartTimeRef.current !== null) {
+          const elapsedMs = Date.now() - playbackStartTimeRef.current;
+          const elapsedSeconds = Math.floor(elapsedMs / 1000);
+          const newTime = lastKnownTimeRef.current + elapsedSeconds;
+          setCurrentTime(newTime);
+        }
+      }, 500);
+    };
+
+    // Resume tracking
+    const resumeTracking = () => {
+      if (lastKnownTimeRef.current >= 0 && playbackStartTimeRef.current === null) {
+        playbackStartTimeRef.current = Date.now();
+        playbackTimerRef.current = setInterval(() => {
+          if (playbackStartTimeRef.current !== null) {
+            const elapsedMs = Date.now() - playbackStartTimeRef.current;
+            const elapsedSeconds = Math.floor(elapsedMs / 1000);
+            const newTime = lastKnownTimeRef.current + elapsedSeconds;
+            setCurrentTime(newTime);
+          }
+        }, 500);
+      }
+    };
+
+    // Detect clicks on iframe area (user interacting with video)
+    const handleIframeAreaClick = (e: MouseEvent) => {
+      if (!iframe) return;
+      
+      const rect = iframe.getBoundingClientRect();
+      const clickX = e.clientX;
+      const clickY = e.clientY;
+      
+      // Check if click is within iframe bounds
+      if (
+        clickX >= rect.left &&
+        clickX <= rect.right &&
+        clickY >= rect.top &&
+        clickY <= rect.bottom
+      ) {
+        if (!hasStarted) {
+          startTracking();
+        } else {
+          // Assume user clicked play - resume tracking
+          resumeTracking();
+        }
+      }
+    };
+
+    if (iframe) {
+      // Start tracking when iframe loads (video likely auto-plays or user will play)
+      iframe.addEventListener('load', () => {
+        // Small delay to let video start
+        setTimeout(startTracking, 1000);
+      });
+
+      // Listen for clicks near the iframe
+      document.addEventListener('click', handleIframeAreaClick, true);
+    }
+
+    // Auto-start tracking after a short delay (assume video is playing)
+    const autoStartTimer = setTimeout(() => {
+      if (!hasStarted) {
+        startTracking();
+      }
+    }, 2000);
+
+    return () => {
+      clearTimeout(autoStartTimer);
+      if (playbackTimerRef.current) {
+        clearInterval(playbackTimerRef.current);
+      }
+      document.removeEventListener('click', handleIframeAreaClick, true);
+    };
+  }, [isGoogleDrivePreview]);
+
+  // Track playback time for native videos
   useEffect(() => {
     const video = videoRef.current;
     if (!video || isGoogleDrivePreview) return; // Skip for Google Drive iframe
@@ -122,12 +222,14 @@ export default function VideoPlayer({
 
   const handleAddComment = () => {
     if (onAddComment) {
-      // For Google Drive iframe, we can't get current time due to CORS restrictions
-      // For native video, always get the actual current time directly from the video element
       let timestamp = 0;
       
-      if (!isGoogleDrivePreview && videoRef.current) {
-        // Get current time directly from video element (most accurate)
+      if (isGoogleDrivePreview) {
+        // For Google Drive: use tracked playback time
+        timestamp = currentTime || 0;
+        console.log('[VideoPlayer] Google Drive - Captured timestamp:', timestamp, 'seconds (tracked)');
+      } else if (videoRef.current) {
+        // For native video: get current time directly from video element (most accurate)
         const videoTime = videoRef.current.currentTime;
         timestamp = videoTime || 0;
         
@@ -136,12 +238,9 @@ export default function VideoPlayer({
           timestamp = 0;
         }
         
-        console.log('[VideoPlayer] Captured timestamp:', timestamp, 'from video element');
-      } else {
-        console.log('[VideoPlayer] Google Drive video or no video ref - timestamp will be 0');
+        console.log('[VideoPlayer] Native video - Captured timestamp:', timestamp, 'seconds');
       }
       
-      // For Google Drive, timestamp will be 0 and user can manually adjust
       onAddComment(timestamp);
     }
   };
@@ -164,6 +263,7 @@ export default function VideoPlayer({
       {isGoogleDrivePreview ? (
         // Google Drive preview requires iframe
         <iframe
+          ref={iframeRef}
           src={videoUrl}
           className="w-full aspect-video"
           allow="autoplay; encrypted-media"
