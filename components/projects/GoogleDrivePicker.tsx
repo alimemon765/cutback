@@ -44,32 +44,58 @@ export default function GoogleDrivePicker({
   // Check if user is connected to Google
   useEffect(() => {
     if (open) {
-      checkConnection();
+      // Small delay to ensure cookies are set after redirect
+      const timer = setTimeout(() => {
+        checkConnection();
+      }, 100);
+      return () => clearTimeout(timer);
     }
   }, [open]);
 
   const checkConnection = async () => {
     setIsChecking(true);
+    setError(null);
     try {
       // Check if we have Google token by trying to fetch files
-      const response = await fetch('/api/drive/files?q=');
+      const response = await fetch('/api/drive/files?q=', {
+        credentials: 'include', // Ensure cookies are sent
+      });
+      
       if (response.ok) {
         setIsConnected(true);
         loadFiles();
       } else if (response.status === 401) {
         setIsConnected(false);
+        // Check if we just connected (from URL param)
+        const urlParams = new URLSearchParams(window.location.search);
+        if (urlParams.get('google_connected') === 'true') {
+          // Just connected, but token check failed - might be timing issue
+          // Wait a moment and retry
+          setTimeout(() => {
+            checkConnection();
+          }, 500);
+        }
       } else {
-        setError('Failed to check Google connection');
+        const errorData = await response.json().catch(() => ({}));
+        setError(errorData.error || 'Failed to check Google connection');
+        setIsConnected(false);
       }
     } catch (err) {
       setIsConnected(false);
+      setError('Failed to check Google connection');
     } finally {
       setIsChecking(false);
     }
   };
 
   const connectGoogle = () => {
-    window.location.href = '/api/auth/google';
+    // Get current project ID from URL if available
+    const currentPath = window.location.pathname;
+    const projectMatch = currentPath.match(/\/project\/([a-f0-9-]+)/);
+    const returnUrl = projectMatch ? `/project/${projectMatch[1]}` : '/dashboard';
+    
+    // Pass return URL so we can redirect back after auth
+    window.location.href = `/api/auth/google?return=${encodeURIComponent(returnUrl)}`;
   };
 
   const loadFiles = async (query: string = '', pageToken?: string) => {

@@ -10,12 +10,20 @@ export async function GET(request: Request) {
     const cookieStore = await cookies();
     const accessToken = cookieStore.get('google_access_token')?.value;
 
+    // Debug logging (remove in production)
+    const allCookies = cookieStore.getAll();
+    const googleCookies = allCookies.filter(c => c.name.includes('google'));
+    console.log('[Drive API] Google cookies found:', googleCookies.length, googleCookies.map(c => c.name));
+
     if (!accessToken) {
+      console.log('[Drive API] No access token found');
       return NextResponse.json(
         { error: 'Not authenticated with Google. Please connect your Google account.' },
         { status: 401 }
       );
     }
+    
+    console.log('[Drive API] Access token found, length:', accessToken.length);
 
     const { searchParams } = new URL(request.url);
     const query = searchParams.get('q') || '';

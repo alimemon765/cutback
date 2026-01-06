@@ -10,18 +10,33 @@ export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
   const code = searchParams.get('code');
   const error = searchParams.get('error');
+  const state = searchParams.get('state'); // Return URL from OAuth flow
 
   const baseUrl = (process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000').replace(/\/$/, ''); // Remove trailing slash
 
+  // Determine where to redirect after auth
+  let returnUrl = `${baseUrl}/dashboard`;
+  if (state) {
+    try {
+      const decodedState = decodeURIComponent(state);
+      // Validate it's a relative URL to prevent open redirect
+      if (decodedState.startsWith('/')) {
+        returnUrl = `${baseUrl}${decodedState}`;
+      }
+    } catch {
+      // Invalid state, use default
+    }
+  }
+
   if (error) {
     return NextResponse.redirect(
-      `${baseUrl}/dashboard?error=google_auth_failed`
+      `${returnUrl}?error=google_auth_failed`
     );
   }
 
   if (!code) {
     return NextResponse.redirect(
-      `${baseUrl}/dashboard?error=no_code`
+      `${returnUrl}?error=no_code`
     );
   }
 
@@ -55,7 +70,7 @@ export async function GET(request: Request) {
       const errorData = await tokenResponse.json().catch(() => ({}));
       console.error('Token exchange error:', errorData);
       return NextResponse.redirect(
-        `${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'}/dashboard?error=token_exchange_failed`
+        `${returnUrl}?error=token_exchange_failed`
       );
     }
 
@@ -71,7 +86,7 @@ export async function GET(request: Request) {
 
     if (!userResponse.ok) {
       return NextResponse.redirect(
-        `${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'}/dashboard?error=user_info_failed`
+        `${returnUrl}?error=user_info_failed`
       );
     }
 
@@ -107,14 +122,14 @@ export async function GET(request: Request) {
       path: '/',
     });
 
-    // Redirect back to dashboard with success
+    // Redirect back to the return URL (or dashboard)
     return NextResponse.redirect(
-      `${baseUrl}/dashboard?google_connected=true`
+      `${returnUrl}${returnUrl.includes('?') ? '&' : '?'}google_connected=true`
     );
   } catch (err) {
     console.error('OAuth callback error:', err);
     return NextResponse.redirect(
-      `${baseUrl}/dashboard?error=oauth_error`
+      `${returnUrl}?error=oauth_error`
     );
   }
 }

@@ -1,0 +1,231 @@
+---
+description: CutBack AI rules (optimized for minimal Cursor credit usage)
+alwaysApply: true
+---
+
+# 🤖 CutBack – Cursor AI Rules (Credit-Optimized)
+
+**Priority: Deliver correct solutions with minimal credit consumption.**
+
+---
+
+## ⚡ CRITICAL: Credit Reduction Strategy
+
+### Model Selection Rules
+- **NEVER** request frontier models (GPT-4, Claude Opus) unless explicitly asked
+- **ALWAYS** use fastest/cheapest model that can handle the task
+- For simple tasks (formatting, typos, imports): Use base models
+- For complex logic: Use mid-tier models only
+
+### Context Management (MOST IMPORTANT)
+- **NEVER** include entire files in responses unless asked
+- **ALWAYS** show only the changed lines with 2-3 lines of context
+- Use diff format: `// ... existing code ...` for unchanged sections
+- If file is >100 lines, NEVER regenerate the whole file
+- Ask "Should I show just the changes or the full file?" if unclear
+
+### Response Length Rules
+- Keep explanations under 3 sentences unless asked for details
+- Use bullet points, not paragraphs
+- Remove filler words: "certainly", "of course", "let me explain"
+- Format: Problem → Solution → Code (skip the essay)
+
+### Interaction Optimization
+- **NEVER** ask clarifying questions if the intent is 90% clear
+- Make reasonable assumptions based on existing patterns
+- Offer alternatives in 1 line, don't wait for confirmation
+- Batch related changes (e.g., "I'll update 3 files for this feature")
+
+### Examples of Efficient Responses
+
+❌ **Bad (High Credit Usage):**
+```
+Sure! I'll help you add authentication. First, let me explain how JWT works...
+[500 words of explanation]
+[Entire file regenerated - 300 lines]
+```
+
+✅ **Good (Low Credit Usage):**
+```
+Adding JWT auth to middleware.ts:
+
+```typescript
+// Add after existing imports
+import { verifyToken } from '@/lib/auth'
+
+// Replace line 15
+const token = req.cookies.get('token')?.value
+if (!token) return Response.json({ error: 'Unauthorized' }, { status: 401 })
+```
+
+Need error handling too?
+```
+
+---
+
+## 🎯 Task-Specific Credit Savers
+
+### For Debugging
+1. Show ONLY the problematic function/block
+2. Explain the fix in 1 sentence
+3. Provide corrected code snippet
+
+### For New Features
+1. List files to modify (don't dump all files)
+2. Show incremental changes per file
+3. Offer to continue if more is needed
+
+### For Refactoring
+1. Ask: "Refactor X or show pattern?" before generating
+2. Provide pattern/example, let developer apply it
+3. Only generate if explicitly requested
+
+---
+
+## 🧱 CutBack Architecture (Reference Only)
+
+**Stack:** Next.js App Router + Supabase + TypeScript + Tailwind
+
+**Key Patterns:**
+- Auth: JWT from cookies → `Authorization: Bearer` header → Supabase
+- Public routes: anon key only, no cookies, explicit RLS `TO anon`
+- Storage: Server-side signed URLs only
+- Comments: Timestamp-based, RLS via review_links
+
+**Non-Negotiables:**
+- Never mix auth/public logic in same route
+- Never expose service role keys to client
+- Always validate tokens before DB access
+- Always handle errors with structured JSON
+
+---
+
+## 🔐 Security Shortcuts (Fast Reference)
+
+**Authenticated API Pattern:**
+```typescript
+const token = cookies().get('access_token')?.value
+if (!token) return Response.json({ error: 'Unauthorized' }, { status: 401 })
+// Use token in Authorization header for Supabase
+```
+
+**Public API Pattern:**
+```typescript
+// Use NEXT_PUBLIC_SUPABASE_ANON_KEY
+// Validate review token if needed
+// Never expect cookies
+```
+
+**RLS Policy Pattern:**
+```sql
+-- Authenticated
+TO authenticated USING (auth.uid() = user_id)
+
+-- Public via review link
+TO anon USING (
+  EXISTS (SELECT 1 FROM review_links WHERE token = ... AND expires_at > now())
+)
+```
+
+---
+
+## 🚫 What NOT to Do (Credit Wasters)
+
+- ❌ Regenerate entire files for 2-line changes
+- ❌ Explain architecture when code is self-evident
+- ❌ Suggest multiple approaches (pick the best one)
+- ❌ Ask "shall I continue?" after every step
+- ❌ Include boilerplate comments in every response
+- ❌ Restate the problem back to the user
+- ❌ Use phrases like "Great question!" or "Let's dive in"
+
+---
+
+## ✅ What TO Do (Credit Savers)
+
+- ✅ Show minimal diffs with context markers
+- ✅ Assume Next.js/React/TS best practices
+- ✅ Reuse existing project patterns
+- ✅ Provide working code immediately
+- ✅ Group related changes
+- ✅ Skip explanations for obvious changes
+- ✅ Use inline comments for complex logic only
+
+---
+
+## 📋 Response Template (Use This Format)
+
+```
+[1 sentence describing what you're doing]
+
+File: path/to/file.ts
+```typescript
+// ... existing code ...
+[only the changes with 2-3 lines of context]
+// ... rest unchanged ...
+```
+
+[Optional: 1 sentence about side effects or next steps]
+```
+
+---
+
+## 🎓 Learning Mode Toggle
+
+If user says "explain" or "why" → Provide detailed explanation
+Otherwise → Assume they want the solution ASAP
+
+---
+
+## 🔄 Iteration Protocol
+
+1. First response: Minimal solution
+2. User asks for more → Expand that specific part
+3. Never preemptively over-deliver
+
+---
+
+## 🧠 Decision Matrix
+
+| Task Type | Response Style | Context Size |
+|-----------|---------------|--------------|
+| Bug fix | Code only + 1 line | Minimal |
+| New feature | Ask scope first | Medium |
+| Refactor | Pattern + example | Small |
+| Question | Direct answer | None |
+| Unclear request | Assume most likely intent | Minimal |
+
+---
+
+## 🎯 The Golden Rule
+
+**If the user can figure it out from the code alone, don't explain it.**
+
+---
+
+## 📊 Credit Usage Self-Check
+
+Before responding, ask yourself:
+1. Can I show just the diff instead of full file? (saves 90% credits)
+2. Can I skip the explanation? (saves 50% credits)
+3. Can I make a reasonable assumption instead of asking? (saves 100% credits on back-and-forth)
+4. Am I using the cheapest model that can handle this? (saves 80% credits)
+
+---
+
+## 🔒 Security (Non-Negotiable)
+
+- Never bypass RLS with service role for user actions
+- Never allow public writes without token validation
+- Validate all inputs before DB access
+- Use database constraints over client trust
+
+---
+
+## ⚙️ Final Directive
+
+**Output = Minimum code to solve the problem + Maximum credit efficiency**
+
+If there's a simpler, faster, cheaper way → **ALWAYS** choose it.---
+alwaysApply: true
+---
