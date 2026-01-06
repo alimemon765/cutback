@@ -85,47 +85,55 @@ export default function AddCommentForm({
       </div>
 
       <form onSubmit={handleSubmit} className="space-y-4">
-        <div className="flex items-center gap-2 mb-4">
-          <span className="text-sm text-muted-foreground">Timestamp:</span>
-          <span className="px-2 py-1 text-sm font-mono bg-primary/20 text-primary border border-primary/30">
-            {formatTime(commentTimestamp)}
-          </span>
-          {commentTimestamp === 0 && (
-            <span className="text-xs text-muted-foreground">
-              (Click video to set timestamp, or edit manually)
-            </span>
-          )}
-        </div>
-        
-        {/* Manual timestamp editor - only show if timestamp is 0 or user wants to adjust */}
+        {/* Timestamp Input - Always show, but highlight if manual entry needed */}
         <div className="grid gap-2 mb-4">
-          <Label htmlFor="timestamp" className="font-mono text-xs uppercase tracking-wider text-muted-foreground">
-            Adjust Timestamp (Optional - MM:SS format)
-          </Label>
-          <Input
-            id="timestamp"
-            type="text"
-            value={formatTime(commentTimestamp)}
-            onChange={(e) => {
-              // Parse MM:SS format
-              const value = e.target.value.trim();
-              const match = value.match(/^(\d+):(\d{2})$/);
-              if (match) {
-                const minutes = parseInt(match[1], 10);
-                const seconds = parseInt(match[2], 10);
-                const totalSeconds = minutes * 60 + seconds;
-                setCommentTimestamp(totalSeconds);
-              } else if (value === '' || value === '0:00') {
-                setCommentTimestamp(0);
-              }
-            }}
-            placeholder="0:00"
-            className="sharp font-mono w-32"
-            disabled={isSubmitting}
-          />
-          <span className="text-xs text-muted-foreground">
-            Format: MM:SS (e.g., 1:23 for 1 minute 23 seconds)
-          </span>
+          <div className="flex items-center justify-between">
+            <Label htmlFor="timestamp" className="font-mono text-xs uppercase tracking-wider">
+              Timestamp {commentTimestamp === 0 && <span className="text-primary">*</span>}
+            </Label>
+            {commentTimestamp === 0 && (
+              <span className="text-xs text-primary font-medium">
+                Required for Google Drive videos
+              </span>
+            )}
+          </div>
+          <div className="flex items-center gap-2">
+            <Input
+              id="timestamp"
+              type="text"
+              value={formatTime(commentTimestamp)}
+              onChange={(e) => {
+                // Parse MM:SS format
+                const value = e.target.value.trim();
+                const match = value.match(/^(\d+):(\d{2})$/);
+                if (match) {
+                  const minutes = parseInt(match[1], 10);
+                  const seconds = parseInt(match[2], 10);
+                  const totalSeconds = minutes * 60 + seconds;
+                  setCommentTimestamp(totalSeconds);
+                } else if (value === '' || value === '0:00') {
+                  setCommentTimestamp(0);
+                }
+              }}
+              placeholder="0:00"
+              className={`sharp font-mono w-32 ${commentTimestamp === 0 ? 'border-primary focus:border-primary' : ''}`}
+              disabled={isSubmitting}
+              required={commentTimestamp === 0}
+            />
+            <span className="px-2 py-1 text-sm font-mono bg-primary/20 text-primary border border-primary/30 rounded">
+              {formatTime(commentTimestamp)}
+            </span>
+          </div>
+          <div className="flex items-start gap-2">
+            <span className="text-xs text-muted-foreground">
+              Format: MM:SS (e.g., 1:23 for 1 minute 23 seconds)
+            </span>
+            {commentTimestamp === 0 && (
+              <span className="text-xs text-muted-foreground italic">
+                • Look at the video player's time display to get the current timestamp
+              </span>
+            )}
+          </div>
         </div>
 
         {!existingClientName && (
