@@ -101,12 +101,18 @@ export default function VideoPlayer({
 
   const handleAddComment = () => {
     if (onAddComment) {
-      // For Google Drive iframe, we can't get current time, so pass 0 and let user adjust
-      // For native video, get the actual current time from the video element
+      // For Google Drive iframe, we can't get current time due to CORS restrictions
+      // For native video, always get the actual current time directly from the video element
       let timestamp = 0;
       if (!isGoogleDrivePreview && videoRef.current) {
-        timestamp = videoRef.current.currentTime || currentTime;
+        // Get current time directly from video element (most accurate)
+        timestamp = videoRef.current.currentTime || 0;
+        // Ensure it's a valid number
+        if (isNaN(timestamp) || timestamp < 0) {
+          timestamp = 0;
+        }
       }
+      // For Google Drive, timestamp will be 0 and user can manually adjust
       onAddComment(timestamp);
     }
   };

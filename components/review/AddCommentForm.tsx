@@ -85,36 +85,47 @@ export default function AddCommentForm({
       </div>
 
       <form onSubmit={handleSubmit} className="space-y-4">
-        <div className="grid gap-2 mb-4">
-          <Label htmlFor="timestamp" className="font-mono text-xs uppercase tracking-wider">
-            Timestamp (MM:SS)
-          </Label>
-          <div className="flex items-center gap-2">
-            <Input
-              id="timestamp"
-              type="text"
-              value={formatTime(commentTimestamp)}
-              onChange={(e) => {
-                // Parse MM:SS format
-                const value = e.target.value.trim();
-                const match = value.match(/^(\d+):(\d{2})$/);
-                if (match) {
-                  const minutes = parseInt(match[1], 10);
-                  const seconds = parseInt(match[2], 10);
-                  const totalSeconds = minutes * 60 + seconds;
-                  setCommentTimestamp(totalSeconds);
-                } else if (value === '' || value === '0:00') {
-                  setCommentTimestamp(0);
-                }
-              }}
-              placeholder="0:00"
-              className="sharp font-mono w-24"
-              disabled={isSubmitting}
-            />
-            <span className="text-sm text-muted-foreground">
-              Format: MM:SS (e.g., 1:23 for 1 minute 23 seconds)
+        <div className="flex items-center gap-2 mb-4">
+          <span className="text-sm text-muted-foreground">Timestamp:</span>
+          <span className="px-2 py-1 text-sm font-mono bg-primary/20 text-primary border border-primary/30">
+            {formatTime(commentTimestamp)}
+          </span>
+          {commentTimestamp === 0 && (
+            <span className="text-xs text-muted-foreground">
+              (Click video to set timestamp, or edit manually)
             </span>
-          </div>
+          )}
+        </div>
+        
+        {/* Manual timestamp editor - only show if timestamp is 0 or user wants to adjust */}
+        <div className="grid gap-2 mb-4">
+          <Label htmlFor="timestamp" className="font-mono text-xs uppercase tracking-wider text-muted-foreground">
+            Adjust Timestamp (Optional - MM:SS format)
+          </Label>
+          <Input
+            id="timestamp"
+            type="text"
+            value={formatTime(commentTimestamp)}
+            onChange={(e) => {
+              // Parse MM:SS format
+              const value = e.target.value.trim();
+              const match = value.match(/^(\d+):(\d{2})$/);
+              if (match) {
+                const minutes = parseInt(match[1], 10);
+                const seconds = parseInt(match[2], 10);
+                const totalSeconds = minutes * 60 + seconds;
+                setCommentTimestamp(totalSeconds);
+              } else if (value === '' || value === '0:00') {
+                setCommentTimestamp(0);
+              }
+            }}
+            placeholder="0:00"
+            className="sharp font-mono w-32"
+            disabled={isSubmitting}
+          />
+          <span className="text-xs text-muted-foreground">
+            Format: MM:SS (e.g., 1:23 for 1 minute 23 seconds)
+          </span>
         </div>
 
         {!existingClientName && (
