@@ -120,9 +120,6 @@ export default function VideoPlayer({
     }
   };
 
-  // Check if this is a Google Drive preview URL (needs iframe) - define early so it's accessible
-  const isGoogleDrivePreview = videoUrl.includes('drive.google.com/file/d/') && videoUrl.includes('/preview');
-
   const handleAddComment = () => {
     if (onAddComment) {
       // For Google Drive iframe, we can't get current time due to CORS restrictions

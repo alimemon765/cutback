@@ -130,7 +130,7 @@ export default function AddCommentForm({
             </span>
             {commentTimestamp === 0 && (
               <span className="text-xs text-muted-foreground italic">
-                • Look at the video player's time display to get the current timestamp
+                • Look at the video player&apos;s time display to get the current timestamp
               </span>
             )}
           </div>

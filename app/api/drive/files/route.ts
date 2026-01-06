@@ -1,6 +1,9 @@
 import { NextResponse } from 'next/server';
 import { cookies } from 'next/headers';
 
+// Mark as dynamic since we use cookies
+export const dynamic = 'force-dynamic';
+
 /**
  * Lists video files from user's Google Drive
  * Requires Google OAuth token

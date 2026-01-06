@@ -1,6 +1,9 @@
 import { NextResponse } from 'next/server';
 import { cookies } from 'next/headers';
 
+// Mark as dynamic since we use cookies
+export const dynamic = 'force-dynamic';
+
 /**
  * Proxies Google Drive video streaming
  * Adds authentication header so videos can be played in video player
