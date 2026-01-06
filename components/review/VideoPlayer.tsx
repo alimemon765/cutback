@@ -141,6 +141,20 @@ export default function VideoPlayer({
         />
       )}
 
+      {/* Add Comment Button - Show for both native video and Google Drive */}
+      {onAddComment && (
+        <div className="absolute top-4 right-4 opacity-0 group-hover:opacity-100 transition-opacity">
+          <Button
+            onClick={handleAddComment}
+            size="sm"
+            className="sharp bg-primary hover:bg-primary/90"
+          >
+            <MessageSquarePlus className="w-4 h-4 mr-2" />
+            Add Comment
+          </Button>
+        </div>
+      )}
+
       {/* Controls Overlay - Only show for native video, not iframe */}
       {!isGoogleDrivePreview && (
       <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/80 to-transparent p-4 opacity-0 group-hover:opacity-100 transition-opacity">
@@ -216,18 +230,6 @@ export default function VideoPlayer({
           </div>
 
           <div className="flex items-center gap-2">
-            {/* Add Comment Button */}
-            {onAddComment && (
-              <Button
-                onClick={handleAddComment}
-                size="sm"
-                className="sharp bg-primary hover:bg-primary/90"
-              >
-                <MessageSquarePlus className="w-4 h-4 mr-2" />
-                Add Comment
-              </Button>
-            )}
-
             {/* Fullscreen */}
             <button
               onClick={handleFullscreen}
