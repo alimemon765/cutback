@@ -64,22 +64,60 @@ export async function POST(
       );
     }
 
-    // Parse form data
-    const formData = await request.formData();
-    const videoFile = formData.get('video') as File;
+    // Check if this is an external video source (JSON) or file upload (FormData)
+    const contentType = request.headers.get('content-type') || '';
+    const isExternalSource = contentType.includes('application/json');
 
-    if (!videoFile) {
-      return NextResponse.json(
-        { error: 'No video file provided' },
-        { status: 400 }
-      );
+    let externalProvider: string | null = null;
+    let externalFileId: string | null = null;
+    let externalFileUrl: string | null = null;
+    let fileName: string;
+    let fileSize: number | null = null;
+    let videoFile: File | null = null;
+
+    if (isExternalSource) {
+      // Handle external video source (Google Drive, etc.)
+      const body = await request.json();
+      externalProvider = body.external_provider;
+      externalFileId = body.external_file_id;
+      externalFileUrl = body.external_file_url;
+      fileName = body.file_name;
+      fileSize = body.file_size || null;
+
+      if (!externalProvider || !externalFileId || !fileName) {
+        return NextResponse.json(
+          { error: 'Missing required fields for external video source' },
+          { status: 400 }
+        );
+      }
+
+      // Validate provider
+      if (!['google_drive', 'dropbox', 'vimeo'].includes(externalProvider)) {
+        return NextResponse.json(
+          { error: 'Invalid external provider' },
+          { status: 400 }
+        );
+      }
+    } else {
+      // Handle file upload
+      const formData = await request.formData();
+      videoFile = formData.get('video') as File;
+
+      if (!videoFile) {
+        return NextResponse.json(
+          { error: 'No video file provided' },
+          { status: 400 }
+        );
+      }
+
+      fileName = videoFile.name;
+      fileSize = videoFile.size;
     }
 
-    // Validate file size
-    const fileSizeMB = (videoFile.size / (1024 * 1024)).toFixed(2);
-    const maxSizeMB = (MAX_FILE_SIZE / (1024 * 1024)).toFixed(0);
-
-    if (videoFile.size > MAX_FILE_SIZE) {
+    // Validate file size (only for uploaded files)
+    if (videoFile && videoFile.size > MAX_FILE_SIZE) {
+      const fileSizeMB = (videoFile.size / (1024 * 1024)).toFixed(2);
+      const maxSizeMB = (MAX_FILE_SIZE / (1024 * 1024)).toFixed(0);
       return NextResponse.json(
         { 
           error: `File too large. File size: ${fileSizeMB}MB, Maximum allowed: ${maxSizeMB}MB.`,
@@ -110,65 +148,78 @@ export async function POST(
       }
     }
 
-    // Generate file path
-    const fileExtension = videoFile.name.split('.').pop();
-    const fileName = `v${nextVersion}_${Date.now()}.${fileExtension}`;
-    const filePath = `${projectId}/${fileName}`;
+    let fileUrl: string;
 
-    // Upload to Supabase Storage using REST API (ensures JWT is sent for RLS)
-    const storageUrl = `${supabaseUrl}/storage/v1/object/videos/${filePath}`;
-    
-    // Create FormData for file upload
-    const uploadFormData = new FormData();
-    uploadFormData.append('file', videoFile);
-
-    const storageResponse = await fetch(storageUrl, {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${accessToken}`,
-        'apikey': process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-        // Don't set Content-Type - browser will set it with boundary for multipart/form-data
-      },
-      body: uploadFormData,
-    });
-
-    if (!storageResponse.ok) {
-      const errorText = await storageResponse.text();
-      let error: any;
-      try {
-        error = JSON.parse(errorText);
-      } catch {
-        error = { message: errorText || storageResponse.statusText };
+    if (externalProvider) {
+      // For external sources, use the provided URL or construct proxy URL
+      // For Google Drive, we'll use our proxy endpoint
+      if (externalProvider === 'google_drive') {
+        fileUrl = `/api/drive/files/${externalFileId}/stream`;
+      } else {
+        // For other providers, use the provided URL
+        fileUrl = externalFileUrl || '';
       }
+    } else {
+      // Handle file upload
+      const fileExtension = videoFile!.name.split('.').pop();
+      const storageFileName = `v${nextVersion}_${Date.now()}.${fileExtension}`;
+      const filePath = `${projectId}/${storageFileName}`;
 
-      // Provide helpful error message for size limit errors
-      if (error.message?.toLowerCase().includes('maximum allowed size') || error.message?.toLowerCase().includes('exceeded')) {
+      // Upload to Supabase Storage using REST API (ensures JWT is sent for RLS)
+      const storageUrl = `${supabaseUrl}/storage/v1/object/videos/${filePath}`;
+      
+      // Create FormData for file upload
+      const uploadFormData = new FormData();
+      uploadFormData.append('file', videoFile!);
+
+      const storageResponse = await fetch(storageUrl, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${accessToken}`,
+          'apikey': process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+          // Don't set Content-Type - browser will set it with boundary for multipart/form-data
+        },
+        body: uploadFormData,
+      });
+
+      if (!storageResponse.ok) {
+        const errorText = await storageResponse.text();
+        let error: any;
+        try {
+          error = JSON.parse(errorText);
+        } catch {
+          error = { message: errorText || storageResponse.statusText };
+        }
+
+        const fileSizeMB = ((videoFile!.size) / (1024 * 1024)).toFixed(2);
+        const maxSizeMB = (MAX_FILE_SIZE / (1024 * 1024)).toFixed(0);
+
+        // Provide helpful error message for size limit errors
+        if (error.message?.toLowerCase().includes('maximum allowed size') || error.message?.toLowerCase().includes('exceeded')) {
+          return NextResponse.json(
+            { 
+              error: `File size limit exceeded. Your file is ${fileSizeMB}MB. Please check your Supabase Storage bucket settings - the limit may be smaller than 500MB.`,
+              fileSize: videoFile!.size,
+              fileSizeMB: fileSizeMB,
+              maxSizeMB: maxSizeMB,
+              details: error.message
+            },
+            { status: storageResponse.status }
+          );
+        }
+
         return NextResponse.json(
           { 
-            error: `File size limit exceeded. Your file is ${fileSizeMB}MB. Please check your Supabase Storage bucket settings - the limit may be smaller than 500MB.`,
-            fileSize: videoFile.size,
-            fileSizeMB: fileSizeMB,
-            maxSizeMB: maxSizeMB,
-            details: error.message
+            error: 'Failed to upload video to storage: ' + (error.message || storageResponse.statusText),
+            details: error
           },
           { status: storageResponse.status }
         );
       }
 
-      return NextResponse.json(
-        { 
-          error: 'Failed to upload video to storage: ' + (error.message || storageResponse.statusText),
-          details: error
-        },
-        { status: storageResponse.status }
-      );
+      // Get public URL (we'll use signed URLs for actual access)
+      fileUrl = `${supabaseUrl}/storage/v1/object/public/videos/${filePath}`;
     }
-
-    const uploadData = await storageResponse.json();
-
-    // Get public URL (we'll use signed URLs for actual access)
-    // Construct the public URL manually since we're not using the client
-    const publicUrl = `${supabaseUrl}/storage/v1/object/public/videos/${filePath}`;
 
     // Deactivate all other versions using REST API
     const deactivateUrl = `${supabaseUrl}/rest/v1/video_versions?project_id=eq.${projectId}`;
@@ -184,9 +235,23 @@ export async function POST(
     });
 
     // Create video version record using REST API
-    // Note: Using file_url instead of storage_url to match existing schema
-    // After running migration, this can be updated to use storage_url
     const createVersionUrl = `${supabaseUrl}/rest/v1/video_versions`;
+    const versionData: any = {
+      project_id: projectId,
+      version_number: nextVersion,
+      file_name: fileName,
+      file_url: fileUrl,
+      file_size: fileSize,
+      is_active: true,
+    };
+
+    // Add external source fields if applicable
+    if (externalProvider) {
+      versionData.external_provider = externalProvider;
+      versionData.external_file_id = externalFileId;
+      versionData.external_file_url = externalFileUrl;
+    }
+
     const versionResponse = await fetch(createVersionUrl, {
       method: 'POST',
       headers: {
@@ -195,28 +260,25 @@ export async function POST(
         'Authorization': `Bearer ${accessToken}`,
         'Prefer': 'return=representation',
       },
-      body: JSON.stringify({
-        project_id: projectId,
-        version_number: nextVersion,
-        file_name: videoFile.name,
-        file_url: publicUrl, // Using file_url to match existing schema
-        file_size: videoFile.size,
-        // Note: mime_type, storage_url, uploaded_by will be added by migration
-        is_active: true,
-      }),
+      body: JSON.stringify(versionData),
     });
 
     if (!versionResponse.ok) {
       const error = await versionResponse.json();
-      // Try to clean up the uploaded file using REST API
-      const deleteUrl = `${supabaseUrl}/storage/v1/object/videos/${filePath}`;
-      await fetch(deleteUrl, {
-        method: 'DELETE',
-        headers: {
-          'Authorization': `Bearer ${accessToken}`,
-          'apikey': process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-        },
-      });
+      // Try to clean up the uploaded file using REST API (only for uploaded files)
+      if (!externalProvider && videoFile) {
+        const fileExtension = videoFile.name.split('.').pop();
+        const storageFileName = `v${nextVersion}_${Date.now()}.${fileExtension}`;
+        const filePath = `${projectId}/${storageFileName}`;
+        const deleteUrl = `${supabaseUrl}/storage/v1/object/videos/${filePath}`;
+        await fetch(deleteUrl, {
+          method: 'DELETE',
+          headers: {
+            'Authorization': `Bearer ${accessToken}`,
+            'apikey': process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+          },
+        });
+      }
       return NextResponse.json(
         { error: 'Failed to create version record: ' + (error.message || 'Unknown error') },
         { status: 500 }

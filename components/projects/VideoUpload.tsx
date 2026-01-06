@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useRef } from 'react';
-import { Upload, X, FileVideo, Loader2 } from 'lucide-react';
+import { Upload, X, FileVideo, Loader2, Cloud } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
   Dialog,
@@ -10,6 +10,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
+import GoogleDrivePicker from './GoogleDrivePicker';
 
 interface VideoUploadProps {
   projectId: string;
@@ -17,6 +18,8 @@ interface VideoUploadProps {
   onOpenChange: (open: boolean) => void;
   onSuccess?: () => void;
 }
+
+type UploadSource = 'upload' | 'drive';
 
 const MAX_FILE_SIZE = 500 * 1024 * 1024; // 500MB
 const ALLOWED_TYPES = ['video/mp4', 'video/webm', 'video/quicktime', 'video/x-msvideo'];
@@ -27,11 +30,14 @@ export default function VideoUpload({
   onOpenChange,
   onSuccess,
 }: VideoUploadProps) {
+  const [uploadSource, setUploadSource] = useState<UploadSource>('upload');
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [selectedDriveFile, setSelectedDriveFile] = useState<any>(null);
   const [isDragging, setIsDragging] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
   const [error, setError] = useState<string | null>(null);
+  const [showDrivePicker, setShowDrivePicker] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const validateFile = (file: File): string | null => {
@@ -81,50 +87,83 @@ export default function VideoUpload({
   };
 
   const handleUpload = async () => {
-    if (!selectedFile) return;
+    if (uploadSource === 'upload' && !selectedFile) return;
+    if (uploadSource === 'drive' && !selectedDriveFile) return;
 
     setIsUploading(true);
     setError(null);
     setUploadProgress(0);
 
     try {
-      const formData = new FormData();
-      formData.append('video', selectedFile);
+      if (uploadSource === 'upload') {
+        // Handle file upload
+        const formData = new FormData();
+        formData.append('video', selectedFile!);
 
-      const xhr = new XMLHttpRequest();
+        const xhr = new XMLHttpRequest();
 
-      // Track upload progress
-      xhr.upload.addEventListener('progress', (e) => {
-        if (e.lengthComputable) {
-          const progress = Math.round((e.loaded / e.total) * 100);
-          setUploadProgress(progress);
-        }
-      });
-
-      // Handle completion
-      xhr.addEventListener('load', () => {
-        if (xhr.status === 200 || xhr.status === 201) {
-          console.log('Upload successful');
-          setSelectedFile(null);
-          onOpenChange(false);
-          if (onSuccess) {
-            onSuccess();
+        // Track upload progress
+        xhr.upload.addEventListener('progress', (e) => {
+          if (e.lengthComputable) {
+            const progress = Math.round((e.loaded / e.total) * 100);
+            setUploadProgress(progress);
           }
-        } else {
-          const response = JSON.parse(xhr.responseText);
-          setError(response.error || 'Upload failed');
+        });
+
+        // Handle completion
+        xhr.addEventListener('load', () => {
+          if (xhr.status === 200 || xhr.status === 201) {
+            console.log('Upload successful');
+            setSelectedFile(null);
+            onOpenChange(false);
+            if (onSuccess) {
+              onSuccess();
+            }
+          } else {
+            const response = JSON.parse(xhr.responseText);
+            setError(response.error || 'Upload failed');
+          }
+          setIsUploading(false);
+        });
+
+        // Handle errors
+        xhr.addEventListener('error', () => {
+          setError('Upload failed. Please try again.');
+          setIsUploading(false);
+        });
+
+        xhr.open('POST', `/api/projects/${projectId}/videos`);
+        xhr.send(formData);
+      } else {
+        // Handle Google Drive file
+        const response = await fetch(`/api/projects/${projectId}/videos`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            external_provider: 'google_drive',
+            external_file_id: selectedDriveFile.id,
+            external_file_url: selectedDriveFile.webViewLink,
+            file_name: selectedDriveFile.name,
+            file_size: selectedDriveFile.size ? parseInt(selectedDriveFile.size) : null,
+          }),
+        });
+
+        if (!response.ok) {
+          const errorData = await response.json().catch(() => ({}));
+          setError(errorData.error || 'Failed to add Drive video');
+          setIsUploading(false);
+          return;
+        }
+
+        setSelectedDriveFile(null);
+        onOpenChange(false);
+        if (onSuccess) {
+          onSuccess();
         }
         setIsUploading(false);
-      });
-
-      // Handle errors
-      xhr.addEventListener('error', () => {
-        setError('Upload failed. Please try again.');
-        setIsUploading(false);
-      });
-
-      xhr.open('POST', `/api/projects/${projectId}/videos`);
-      xhr.send(formData);
+      }
     } catch (err) {
       console.error('Upload error:', err);
       setError(err instanceof Error ? err.message : 'Upload failed');
@@ -135,10 +174,17 @@ export default function VideoUpload({
   const handleClose = () => {
     if (!isUploading) {
       setSelectedFile(null);
+      setSelectedDriveFile(null);
       setError(null);
       setUploadProgress(0);
+      setUploadSource('upload');
       onOpenChange(false);
     }
+  };
+
+  const handleDriveSelect = (file: any) => {
+    setSelectedDriveFile(file);
+    setShowDrivePicker(false);
   };
 
   return (
@@ -152,7 +198,31 @@ export default function VideoUpload({
         </DialogHeader>
 
         <div className="space-y-4">
-          {!selectedFile ? (
+          {/* Source Selection */}
+          {!selectedFile && !selectedDriveFile && (
+            <div className="flex gap-2 border-b border-border pb-4">
+              <Button
+                type="button"
+                variant={uploadSource === 'upload' ? 'default' : 'outline'}
+                onClick={() => setUploadSource('upload')}
+                className="sharp flex-1"
+              >
+                <Upload className="w-4 h-4 mr-2" />
+                Upload File
+              </Button>
+              <Button
+                type="button"
+                variant={uploadSource === 'drive' ? 'default' : 'outline'}
+                onClick={() => setUploadSource('drive')}
+                className="sharp flex-1"
+              >
+                <Cloud className="w-4 h-4 mr-2" />
+                Google Drive
+              </Button>
+            </div>
+          )}
+
+          {uploadSource === 'upload' && !selectedFile ? (
             <div
               className={`border-2 border-dashed rounded-md p-12 text-center transition-colors ${
                 isDragging
@@ -191,19 +261,56 @@ export default function VideoUpload({
                 Supported formats: MP4, WebM, QuickTime, AVI
               </p>
             </div>
+          ) : uploadSource === 'drive' && !selectedDriveFile ? (
+            <div className="border-2 border-dashed border-border rounded-md p-12 text-center">
+              <div className="inline-flex items-center justify-center w-16 h-16 border border-border mb-4">
+                <Cloud className="w-8 h-8 text-muted-foreground" />
+              </div>
+              <h3 className="font-semibold text-foreground mb-2">
+                Select from Google Drive
+              </h3>
+              <p className="text-sm text-muted-foreground mb-4">
+                Browse and select a video from your Google Drive
+              </p>
+              <Button
+                type="button"
+                variant="outline"
+                className="sharp"
+                onClick={() => setShowDrivePicker(true)}
+              >
+                Browse Drive
+              </Button>
+            </div>
           ) : (
             <div className="border border-border rounded-md p-6">
               <div className="flex items-start justify-between">
                 <div className="flex items-start gap-4 flex-1">
-                  <div className="w-12 h-12 border border-border flex items-center justify-center flex-shrink-0">
-                    <FileVideo className="w-6 h-6 text-muted-foreground" />
-                  </div>
+                  {selectedDriveFile?.thumbnailLink ? (
+                    <img
+                      src={selectedDriveFile.thumbnailLink}
+                      alt={selectedDriveFile.name}
+                      className="w-12 h-12 object-cover border border-border flex-shrink-0"
+                    />
+                  ) : (
+                    <div className="w-12 h-12 border border-border flex items-center justify-center flex-shrink-0">
+                      <FileVideo className="w-6 h-6 text-muted-foreground" />
+                    </div>
+                  )}
                   <div className="flex-1 min-w-0">
                     <p className="font-medium text-foreground truncate">
-                      {selectedFile.name}
+                      {selectedFile?.name || selectedDriveFile?.name}
                     </p>
                     <p className="text-sm text-muted-foreground">
-                      {(selectedFile.size / 1024 / 1024).toFixed(2)} MB
+                      {selectedFile
+                        ? `${(selectedFile.size / 1024 / 1024).toFixed(2)} MB`
+                        : selectedDriveFile?.size
+                        ? `${(parseInt(selectedDriveFile.size) / 1024 / 1024).toFixed(2)} MB`
+                        : 'Size unknown'}
+                      {selectedDriveFile && (
+                        <span className="ml-2 px-2 py-0.5 text-xs bg-primary/20 text-primary border border-primary/30">
+                          Google Drive
+                        </span>
+                      )}
                     </p>
                     {isUploading && (
                       <div className="mt-3">
@@ -230,7 +337,10 @@ export default function VideoUpload({
                     type="button"
                     variant="ghost"
                     size="sm"
-                    onClick={() => setSelectedFile(null)}
+                    onClick={() => {
+                      setSelectedFile(null);
+                      setSelectedDriveFile(null);
+                    }}
                   >
                     <X className="w-4 h-4" />
                   </Button>
@@ -258,7 +368,7 @@ export default function VideoUpload({
             <Button
               type="button"
               onClick={handleUpload}
-              disabled={!selectedFile || isUploading}
+              disabled={(!selectedFile && !selectedDriveFile) || isUploading}
               className="sharp"
             >
               {isUploading ? (
@@ -275,6 +385,13 @@ export default function VideoUpload({
             </Button>
           </div>
         </div>
+
+        {/* Google Drive Picker */}
+        <GoogleDrivePicker
+          open={showDrivePicker}
+          onOpenChange={setShowDrivePicker}
+          onSelect={handleDriveSelect}
+        />
       </DialogContent>
     </Dialog>
   );

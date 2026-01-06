@@ -75,50 +75,70 @@ export async function POST(
       );
     }
 
-    // Get signed URL for video using anon key
-    // Extract storage path from file_url (which is a full public URL)
-    // file_url format: https://xxx.supabase.co/storage/v1/object/public/videos/path/to/file.mp4
-    // We need: path/to/file.mp4
-    let storagePath: string | null = null;
+    // Check if this is an external video source
+    const externalProvider = (activeVersion as any).external_provider;
+    const externalFileId = (activeVersion as any).external_file_id;
     
-    if (activeVersion.file_url) {
-      // Try to extract path from public URL
-      const urlMatch = activeVersion.file_url.match(/\/storage\/v1\/object\/public\/videos\/(.+)$/);
-      if (urlMatch && urlMatch[1]) {
-        storagePath = urlMatch[1];
+    let videoUrl: string;
+
+    if (externalProvider && externalFileId) {
+      // External video source (Google Drive, Dropbox, Vimeo)
+      if (externalProvider === 'google_drive') {
+        // Use our proxy endpoint for Google Drive streaming
+        const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
+        videoUrl = `${baseUrl}/api/drive/files/${externalFileId}/stream`;
       } else {
-        // If file_url is already a path (not a full URL), use it directly
-        storagePath = activeVersion.file_url;
+        // For other providers, use the external_file_url
+        videoUrl = (activeVersion as any).external_file_url || activeVersion.file_url;
       }
-    }
-    
-    // Fallback: check if we have file_path or storage_url columns
-    if (!storagePath && (activeVersion as any).file_path) {
-      storagePath = (activeVersion as any).file_path;
-    }
-    if (!storagePath && (activeVersion as any).storage_url) {
-      const storageUrl = (activeVersion as any).storage_url;
-      const urlMatch = storageUrl?.match(/\/storage\/v1\/object\/public\/videos\/(.+)$/);
-      storagePath = urlMatch ? urlMatch[1] : storageUrl;
-    }
+    } else {
+      // Uploaded video - get signed URL from Supabase Storage
+      // Extract storage path from file_url (which is a full public URL)
+      // file_url format: https://xxx.supabase.co/storage/v1/object/public/videos/path/to/file.mp4
+      // We need: path/to/file.mp4
+      let storagePath: string | null = null;
+      
+      if (activeVersion.file_url) {
+        // Try to extract path from public URL
+        const urlMatch = activeVersion.file_url.match(/\/storage\/v1\/object\/public\/videos\/(.+)$/);
+        if (urlMatch && urlMatch[1]) {
+          storagePath = urlMatch[1];
+        } else {
+          // If file_url is already a path (not a full URL), use it directly
+          storagePath = activeVersion.file_url;
+        }
+      }
+      
+      // Fallback: check if we have file_path or storage_url columns
+      if (!storagePath && (activeVersion as any).file_path) {
+        storagePath = (activeVersion as any).file_path;
+      }
+      if (!storagePath && (activeVersion as any).storage_url) {
+        const storageUrl = (activeVersion as any).storage_url;
+        const urlMatch = storageUrl?.match(/\/storage\/v1\/object\/public\/videos\/(.+)$/);
+        storagePath = urlMatch ? urlMatch[1] : storageUrl;
+      }
 
-    if (!storagePath) {
-      return NextResponse.json(
-        { error: 'Video file path not found' },
-        { status: 500 }
-      );
-    }
+      if (!storagePath) {
+        return NextResponse.json(
+          { error: 'Video file path not found' },
+          { status: 500 }
+        );
+      }
 
-    const { data: signedUrlData, error: urlError } = await supabase.storage
-      .from('videos')
-      .createSignedUrl(storagePath, 604800); // 7 days
+      const { data: signedUrlData, error: urlError } = await supabase.storage
+        .from('videos')
+        .createSignedUrl(storagePath, 604800); // 7 days
 
-    if (urlError || !signedUrlData) {
-      console.error('Error creating signed URL:', urlError);
-      return NextResponse.json(
-        { error: 'Failed to access video' },
-        { status: 500 }
-      );
+      if (urlError || !signedUrlData) {
+        console.error('Error creating signed URL:', urlError);
+        return NextResponse.json(
+          { error: 'Failed to access video' },
+          { status: 500 }
+        );
+      }
+
+      videoUrl = signedUrlData.signedUrl;
     }
 
     // Update access count using anon key (will need RLS policy for this)
@@ -139,7 +159,7 @@ export async function POST(
       },
       videoVersion: {
         ...activeVersion,
-        signed_url: signedUrlData.signedUrl,
+        signed_url: videoUrl,
       },
       requiresPassword: false,
     });
