@@ -117,15 +117,29 @@ export default function VideoPlayer({
     video.currentTime = timestamp;
   };
 
+  // Check if this is a Google Drive preview URL (needs iframe)
+  const isGoogleDrivePreview = videoUrl.includes('drive.google.com/file/d/') && videoUrl.includes('/preview');
+  
   return (
     <div className="relative bg-black group">
       {/* Video Element */}
-      <video
-        ref={videoRef}
-        src={videoUrl}
-        className="w-full aspect-video"
-        onClick={togglePlay}
-      />
+      {isGoogleDrivePreview ? (
+        // Google Drive preview requires iframe
+        <iframe
+          src={videoUrl}
+          className="w-full aspect-video"
+          allow="autoplay; encrypted-media"
+          allowFullScreen
+        />
+      ) : (
+        <video
+          ref={videoRef}
+          src={videoUrl}
+          className="w-full aspect-video"
+          onClick={togglePlay}
+          controls={false}
+        />
+      )}
 
       {/* Controls Overlay */}
       <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/80 to-transparent p-4 opacity-0 group-hover:opacity-100 transition-opacity">
@@ -223,6 +237,7 @@ export default function VideoPlayer({
           </div>
         </div>
       </div>
+      )}
     </div>
   );
 }

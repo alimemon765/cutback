@@ -84,9 +84,22 @@ export async function POST(
     if (externalProvider && externalFileId) {
       // External video source (Google Drive, Dropbox, Vimeo)
       if (externalProvider === 'google_drive') {
-        // Use our proxy endpoint for Google Drive streaming
-        const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
-        videoUrl = `${baseUrl}/api/drive/files/${externalFileId}/stream`;
+        // For public review pages, use Google Drive's direct video URL
+        // Convert file ID to a format that works for public access
+        // Format: https://drive.google.com/file/d/FILE_ID/preview
+        // This works if the file is shared publicly
+        const drivePublicUrl = (activeVersion as any).external_file_url;
+        if (drivePublicUrl && drivePublicUrl.includes('drive.google.com')) {
+          // Use the shareable link, but convert to preview format for video playback
+          // Extract file ID from webViewLink or use stored file ID
+          const fileIdMatch = drivePublicUrl.match(/\/d\/([a-zA-Z0-9_-]+)/);
+          const fileId = fileIdMatch ? fileIdMatch[1] : externalFileId;
+          // Use Google Drive's video preview URL (works for public files)
+          videoUrl = `https://drive.google.com/file/d/${fileId}/preview`;
+        } else {
+          // Fallback: try direct preview URL with stored file ID
+          videoUrl = `https://drive.google.com/file/d/${externalFileId}/preview`;
+        }
       } else {
         // For other providers, use the external_file_url
         videoUrl = (activeVersion as any).external_file_url || activeVersion.file_url;
