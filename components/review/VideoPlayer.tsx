@@ -101,7 +101,13 @@ export default function VideoPlayer({
 
   const handleAddComment = () => {
     if (onAddComment) {
-      onAddComment(currentTime);
+      // For Google Drive iframe, we can't get current time, so pass 0 and let user adjust
+      // For native video, get the actual current time from the video element
+      let timestamp = 0;
+      if (!isGoogleDrivePreview && videoRef.current) {
+        timestamp = videoRef.current.currentTime || currentTime;
+      }
+      onAddComment(timestamp);
     }
   };
 

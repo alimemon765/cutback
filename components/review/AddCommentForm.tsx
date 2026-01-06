@@ -24,6 +24,7 @@ export default function AddCommentForm({
   const [content, setContent] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [commentTimestamp, setCommentTimestamp] = useState(timestamp);
 
   useEffect(() => {
     // Load client name from localStorage if available
@@ -31,7 +32,9 @@ export default function AddCommentForm({
     if (savedName && !existingClientName) {
       setClientName(savedName);
     }
-  }, [existingClientName]);
+    // Update timestamp when prop changes
+    setCommentTimestamp(timestamp);
+  }, [existingClientName, timestamp]);
 
   const formatTime = (time: number) => {
     const minutes = Math.floor(time / 60);
@@ -53,7 +56,7 @@ export default function AddCommentForm({
       await onSubmit({
         clientName: clientName.trim(),
         content: content.trim(),
-        timestamp,
+        timestamp: commentTimestamp,
       });
 
       // Reset form
@@ -82,11 +85,36 @@ export default function AddCommentForm({
       </div>
 
       <form onSubmit={handleSubmit} className="space-y-4">
-        <div className="flex items-center gap-2 mb-4">
-          <span className="text-sm text-muted-foreground">Timestamp:</span>
-          <span className="px-2 py-1 text-sm font-mono bg-primary/20 text-primary border border-primary/30">
-            {formatTime(timestamp)}
-          </span>
+        <div className="grid gap-2 mb-4">
+          <Label htmlFor="timestamp" className="font-mono text-xs uppercase tracking-wider">
+            Timestamp (MM:SS)
+          </Label>
+          <div className="flex items-center gap-2">
+            <Input
+              id="timestamp"
+              type="text"
+              value={formatTime(commentTimestamp)}
+              onChange={(e) => {
+                // Parse MM:SS format
+                const value = e.target.value.trim();
+                const match = value.match(/^(\d+):(\d{2})$/);
+                if (match) {
+                  const minutes = parseInt(match[1], 10);
+                  const seconds = parseInt(match[2], 10);
+                  const totalSeconds = minutes * 60 + seconds;
+                  setCommentTimestamp(totalSeconds);
+                } else if (value === '' || value === '0:00') {
+                  setCommentTimestamp(0);
+                }
+              }}
+              placeholder="0:00"
+              className="sharp font-mono w-24"
+              disabled={isSubmitting}
+            />
+            <span className="text-sm text-muted-foreground">
+              Format: MM:SS (e.g., 1:23 for 1 minute 23 seconds)
+            </span>
+          </div>
         </div>
 
         {!existingClientName && (
