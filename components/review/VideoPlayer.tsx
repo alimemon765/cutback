@@ -23,32 +23,53 @@ export default function VideoPlayer({
   const [duration, setDuration] = useState(0);
   const [volume, setVolume] = useState(1);
 
+  // Check if this is a Google Drive preview URL (needs iframe) - define early
+  const isGoogleDrivePreview = videoUrl.includes('drive.google.com/file/d/') && videoUrl.includes('/preview');
+
   useEffect(() => {
     const video = videoRef.current;
-    if (!video) return;
+    if (!video || isGoogleDrivePreview) return; // Skip for Google Drive iframe
 
     const handleTimeUpdate = () => {
-      setCurrentTime(video.currentTime);
+      const time = video.currentTime;
+      if (!isNaN(time) && time >= 0) {
+        setCurrentTime(time);
+      }
     };
 
     const handleLoadedMetadata = () => {
-      setDuration(video.duration);
+      const dur = video.duration;
+      if (!isNaN(dur) && dur > 0) {
+        setDuration(dur);
+      }
     };
 
     const handleEnded = () => {
       setIsPlaying(false);
     };
 
+    const handlePlay = () => {
+      setIsPlaying(true);
+    };
+
+    const handlePause = () => {
+      setIsPlaying(false);
+    };
+
     video.addEventListener('timeupdate', handleTimeUpdate);
     video.addEventListener('loadedmetadata', handleLoadedMetadata);
     video.addEventListener('ended', handleEnded);
+    video.addEventListener('play', handlePlay);
+    video.addEventListener('pause', handlePause);
 
     return () => {
       video.removeEventListener('timeupdate', handleTimeUpdate);
       video.removeEventListener('loadedmetadata', handleLoadedMetadata);
       video.removeEventListener('ended', handleEnded);
+      video.removeEventListener('play', handlePlay);
+      video.removeEventListener('pause', handlePause);
     };
-  }, []);
+  }, [isGoogleDrivePreview]);
 
   const togglePlay = () => {
     const video = videoRef.current;
